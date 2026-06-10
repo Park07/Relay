@@ -44,23 +44,43 @@ CAP_FACTORS = [1.05, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, float("inf")]
 
 
 # --------------------------------------------------------------------------- #
-def load_calibration() -> tuple[float, float, str] | None:
+def load_calibration() -> dict | None:
     f = RESULTS / "calibration.json"
     if not f.exists():
         return None
-    d = json.loads(f.read_text())
-    return float(d["alpha_ms"]), float(d["beta_ms"]), str(d.get("source", "unknown"))
+    return json.loads(f.read_text())
 
 
 def build_scenario(quick: bool) -> tuple[Scenario, str]:
     kw: dict = {}
     src = "Scenario defaults (calibrated constants)"
     cal = load_calibration()
+    measured = False
     if cal:
-        kw["alpha_ms"], kw["beta_ms"], cal_src = cal
-        src = f"calibration.json (source={cal_src})"
+        kw["alpha_ms"] = float(cal["alpha_ms"])
+        kw["beta_ms"] = float(cal["beta_ms"])
+        if "prefill_ms" in cal:                       # newer calibrations carry it
+            kw["prefill_ms"] = float(cal["prefill_ms"])
+        measured = bool(cal.get("measured", False))
+        src = f"calibration.json (source={cal.get('source', 'unknown')})"
+
     n = 8_000 if quick else 30_000
-    return Scenario(n_requests=n, warmup_requests=n // 10, **kw), src
+    s = Scenario(n_requests=n, warmup_requests=n // 10, **kw)
+
+    # The default offered_rps (240) is sized for the fast synthetic engine. Real
+    # measured latencies are far larger, so a fixed rate would overload the fleet
+    # and p99 would diverge (an unstable queue, not a result). When the constants
+    # are measured, size the offered load to a conservative fraction of fleet
+    # capacity instead, so every policy runs in a stable regime and p99 is
+    # meaningful. Conservative per-item service time = alpha + beta + prefill
+    # (a b=1 cache *miss*: the slowest unit, ignoring batching/cache amortisation),
+    # which under-counts throughput and therefore keeps the queue stable.
+    if measured:
+        unit_ms = s.alpha_ms + s.beta_ms + s.prefill_ms
+        capacity_rps = s.n_workers * s.max_concurrent_batches * 1000.0 / unit_ms
+        s.offered_rps = max(1.0, round(0.75 * capacity_rps, 2))
+
+    return s, src
 
 
 def run_sweep(s: Scenario) -> tuple[pd.DataFrame, dict[str, RunResult]]:

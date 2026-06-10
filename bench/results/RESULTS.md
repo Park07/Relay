@@ -6,14 +6,14 @@
 
 Sweeping the router's single knob `load_cap_factor` from pure affinity (cap = inf) toward round-robin traces a clean Pareto frontier between **KV-cache locality** and **load balance**:
 
-- **Cache-hit rate** rises from **69.1%** (round-robin) to **95.1%** (pure affinity).
-- **p99 latency** falls from **1436 ms** (round-robin) to **440 ms** (pure affinity) — a **3.3x** reduction — because cache hits skip the 160 ms prefill.
-- The **cost** is load imbalance: from **1.01x** (round-robin) to **2.08x** (pure affinity, where the hottest prefix pins its traffic to one worker).
+- **Cache-hit rate** rises from **69.4%** (round-robin) to **95.1%** (pure affinity).
+- **p99 latency** falls from **7612 ms** (round-robin) to **30347 ms** (pure affinity) — a **0.3x** reduction — because cache hits skip the 634 ms prefill.
+- The **cost** is load imbalance: from **1.00x** (round-robin) to **2.08x** (pure affinity, where the hottest prefix pins its traffic to one worker).
 
 ### The knee (recommended operating point)
 
 At **`load_cap_factor = 1.5`** the bounded-load policy captures most of the locality benefit for a modest imbalance cost:
-- cache-hit **88.4%**, p99 **559 ms** (**2.6x** lower than round-robin), imbalance **1.47x** (**1.45x** the round-robin baseline).
+- cache-hit **86.0%**, p99 **10215 ms** (**0.7x** lower than round-robin), imbalance **1.30x** (**1.30x** the round-robin baseline).
 
 ![Pareto frontier](frontier.png)
 
@@ -21,17 +21,17 @@ At **`load_cap_factor = 1.5`** the bounded-load policy captures most of the loca
 
 | policy | cap | hit | p50 | p95 | p99 | thrpt | imbal | batch | util |
 |---|---|---|---|---|---|---|---|---|---|
-| round_robin | — | 0.691 | 460 | 1113 | 1436 | 240 | 1.01 | 6.1 | 0.90 |
-| prefix | 1.05 | 0.759 | 276 | 768 | 1016 | 240 | 1.24 | 4.8 | 0.75 |
-| prefix | 1.1 | 0.789 | 243 | 646 | 905 | 241 | 1.31 | 4.6 | 0.68 |
-| prefix | 1.25 | 0.842 | 194 | 492 | 689 | 241 | 1.36 | 4.3 | 0.56 |
-| prefix | 1.5 | 0.884 | 113 | 428 | 559 | 241 | 1.47 | 4.2 | 0.46 |
-| prefix | 1.75 | 0.905 | 106 | 376 | 521 | 241 | 1.60 | 4.2 | 0.41 |
-| prefix | 2 | 0.918 | 103 | 351 | 487 | 241 | 1.70 | 4.2 | 0.38 |
-| prefix | 2.5 | 0.932 | 101 | 323 | 457 | 241 | 1.91 | 4.2 | 0.35 |
-| prefix | 3 | 0.942 | 100 | 314 | 470 | 241 | 2.02 | 4.3 | 0.32 |
-| prefix | 4 | 0.951 | 99 | 311 | 440 | 241 | 2.08 | 4.3 | 0.30 |
-| prefix | inf | 0.951 | 99 | 311 | 440 | 241 | 2.08 | 4.3 | 0.30 |
+| round_robin | — | 0.694 | 4059 | 6046 | 7612 | 3 | 1.00 | 1.0 | 0.67 |
+| prefix | 1.05 | 0.739 | 4029 | 5863 | 7310 | 3 | 1.08 | 1.0 | 0.67 |
+| prefix | 1.1 | 0.767 | 4024 | 5971 | 7527 | 3 | 1.11 | 1.0 | 0.66 |
+| prefix | 1.25 | 0.816 | 4049 | 6380 | 8290 | 3 | 1.19 | 1.1 | 0.65 |
+| prefix | 1.5 | 0.860 | 4097 | 7466 | 10215 | 3 | 1.30 | 1.1 | 0.64 |
+| prefix | 1.75 | 0.891 | 4169 | 8923 | 12284 | 3 | 1.42 | 1.1 | 0.62 |
+| prefix | 2 | 0.903 | 4212 | 9835 | 13471 | 3 | 1.48 | 1.2 | 0.61 |
+| prefix | 2.5 | 0.920 | 4310 | 12035 | 16494 | 3 | 1.67 | 1.2 | 0.60 |
+| prefix | 3 | 0.928 | 4423 | 14805 | 20514 | 3 | 1.84 | 1.3 | 0.58 |
+| prefix | 4 | 0.949 | 4856 | 21442 | 30387 | 3 | 2.08 | 1.5 | 0.55 |
+| prefix | inf | 0.951 | 4843 | 21330 | 30347 | 3 | 2.08 | 1.5 | 0.55 |
 
 ## Per-worker locality (why imbalance is the cost)
 
@@ -39,17 +39,17 @@ Round-robin spreads every prefix across all workers, so each worker's cache-hit 
 
 | worker | round-robin hit | round-robin items | affinity hit | affinity items |
 |---|---|---|---|---|
-| w0 | 0.690 | 6840 | 0.970 | 4839 |
-| w1 | 0.685 | 6583 | 0.967 | 14055 |
-| w2 | 0.697 | 6798 | 0.897 | 4046 |
-| w3 | 0.693 | 6779 | 0.928 | 4060 |
+| w0 | 0.699 | 6745 | 0.969 | 4839 |
+| w1 | 0.691 | 6742 | 0.967 | 14055 |
+| w2 | 0.700 | 6756 | 0.896 | 4046 |
+| w3 | 0.684 | 6757 | 0.928 | 4060 |
 
 ## Setup (for reproducibility)
 
-- **Engine model:** CacheAwareMockEngine, latency `(alpha + beta*b + prefill*distinct_missed_prefixes) * jitter` with alpha=15.2 ms, beta=7.8 ms, prefill=160 ms, lognormal jitter sigma=0.15. alpha/beta provenance: calibration.json (source=synthetic).
+- **Engine model:** CacheAwareMockEngine, latency `(alpha + beta*b + prefill*distinct_missed_prefixes) * jitter` with alpha=1834.9 ms, beta=1947.8 ms, prefill=634 ms, lognormal jitter sigma=0.15. alpha/beta provenance: calibration.json (source=ollama:qwen2.5:0.5b).
 - **Fleet:** 4 workers x 4 concurrent batches, max batch 16, cache capacity 48 distinct prefixes per worker.
 - **Workload:** finite Zipf, s=1.1, pool=256 shared prefixes (800-char shared block + 48-char unique suffix); realized top-8 prefix mass = 51.9%.
-- **Arrivals:** Poisson, offered 240 req/s; 30,000 requests, first 3,000 excluded from steady-state metrics (cold-cache warmup).
+- **Arrivals:** Poisson, offered 3 req/s; 30,000 requests, first 3,000 excluded from steady-state metrics (cold-cache warmup).
 - **Scheduling:** deadline batch former, default budget 50 ms (DESIGN.md §8.1); routing per request at admission into per-worker queues (DESIGN.md §8.2).
 - **Seeds:** workload=7, arrivals=11, engine=23. Every policy sees the identical request/arrival stream.
 
