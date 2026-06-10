@@ -1,4 +1,5 @@
 # Relay
+<<<<<<< HEAD
 
 A GPU inference-serving **control plane**: queue → schedule → batch → place → observe → autoscale. The lead feature is **prefix / KV-cache-aware routing under bounded load** — steering same-prefix requests to the same worker to reuse its KV cache, balanced by bounded-load consistent hashing so a hot prefix can't pin one worker. One knob (`load_cap_factor`) sweeps the whole policy space from pure cache affinity to round-robin, and the headline artifact is the **Pareto frontier** that knob traces between cache locality, load balance, and tail latency.
 
@@ -106,3 +107,5 @@ The unit suite pins the properties the result depends on: the ring's minimal-dis
 ## Status
 
 The core algorithmic result is built, executed, and verified with real artifacts. The surrounding gateway/scheduler/worker/proto/deploy are substantive, faithful implementations of `DESIGN.md`; standing them up live requires Redis/Postgres/gRPC (local) and a CUDA box (vLLM validation), per the tiers above.
+=======
+>>>>>>> 73566137212b68f57b1b1cea0be83a6d59bec08b
