@@ -1,0 +1,9 @@
+version: v1
+managed:
+  enabled: true
+plugins:
+  # Generates relay/v1/worker_pb2.py and worker_pb2_grpc.py under services/_gen.
+  - plugin: buf.build/protocolbuffers/python
+    out: services/_gen
+  - plugin: buf.build/grpc/python
+    out: services/_gen

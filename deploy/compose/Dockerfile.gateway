@@ -1,0 +1,11 @@
+# Relay Gateway image (DESIGN.md §5.1). Stateless public surface.
+FROM python:3.12-slim
+WORKDIR /app
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir ".[gateway]" || pip install --no-cache-dir \
+    fastapi uvicorn[standard] pydantic redis asyncpg prometheus-client httpx
+COPY relay_core ./relay_core
+COPY services ./services
+ENV PYTHONPATH=/app PORT=8080
+EXPOSE 8080
+CMD ["python", "-m", "services.gateway.app"]

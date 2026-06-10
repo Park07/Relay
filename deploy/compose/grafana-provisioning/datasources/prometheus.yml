@@ -1,0 +1,9 @@
+# Auto-provision the Prometheus datasource (DESIGN.md §5.5).
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true

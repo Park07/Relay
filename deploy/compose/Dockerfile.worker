@@ -1,0 +1,12 @@
+# Relay Worker image (DESIGN.md §5.3). Dumb, replaceable; engine via RELAY_ENGINE.
+# Only this image changes to swap mock <-> ollama <-> torch-mps <-> vllm.
+FROM python:3.12-slim
+WORKDIR /app
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir ".[worker]" || pip install --no-cache-dir \
+    grpcio redis prometheus-client numpy httpx
+COPY relay_core ./relay_core
+COPY services ./services
+ENV PYTHONPATH=/app RELAY_ENGINE=mock
+EXPOSE 9102
+CMD ["python", "-m", "services.worker.main"]

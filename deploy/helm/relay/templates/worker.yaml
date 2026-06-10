@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-worker
+  labels:
+    {{- include "relay.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  # No `replicas:` here on purpose — the HPA owns the replica count. Setting it
+  # would fight the autoscaler.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: relay
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: relay
+        app.kubernetes.io/component: worker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.worker.metricsPort }}"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: worker
+          image: "{{ include "relay.image" . }}-worker"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "-m", "services.worker.main"]
+          ports:
+            - { name: metrics, containerPort: {{ .Values.worker.metricsPort }} }
+          env:
+            - name: RELAY_ENGINE
+              value: {{ .Values.worker.engine | quote }}
+            - name: RELAY_WORKER_MODELS
+              value: {{ .Values.worker.models | quote }}
+            - name: SCHEDULER_ADDR
+              value: "{{ .Release.Name }}-scheduler:{{ .Values.scheduler.grpcPort }}"
+            - name: MAX_BATCH
+              value: "{{ .Values.worker.maxBatch }}"
+            - name: MAX_CONCURRENT_BATCHES
+              value: "{{ .Values.worker.maxConcurrentBatches }}"
+            - name: RELAY_METRICS_PORT
+              value: "{{ .Values.worker.metricsPort }}"
+          resources: {{- toYaml .Values.worker.resources | nindent 12 }}
+{{- if .Values.worker.hpa.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ .Release.Name }}-worker
+  labels:
+    {{- include "relay.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ .Release.Name }}-worker
+  minReplicas: {{ .Values.worker.hpa.minReplicas }}
+  maxReplicas: {{ .Values.worker.hpa.maxReplicas }}
+  metrics:
+    # The headline (ADR-9): scale on the custom business metric relay_queue_depth
+    # surfaced through prometheus-adapter as an External metric, NOT on CPU.
+    # AverageValue means "target N queued items per worker pod".
+    - type: External
+      external:
+        metric:
+          name: relay_queue_depth
+        target:
+          type: AverageValue
+          averageValue: "{{ .Values.worker.hpa.targetQueueDepthPerPod }}"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - { type: Pods, value: 4, periodSeconds: 30 }
+    scaleDown:
+      stabilizationWindowSeconds: 120
+      policies:
+        - { type: Pods, value: 1, periodSeconds: 60 }
+{{- end }}

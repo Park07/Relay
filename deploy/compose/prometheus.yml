@@ -1,0 +1,21 @@
+# Prometheus scrape config for the Relay local stack (DESIGN.md §5.5).
+# Every service exposes /metrics from commit #1 (ADR-10).
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: relay-gateway
+    static_configs:
+      - targets: ["gateway:8080"]
+  - job_name: relay-scheduler
+    static_configs:
+      - targets: ["scheduler:9101"]
+  - job_name: relay-workers
+    # In compose, workers are scaled replicas behind one service name; in k8s
+    # this is replaced by pod service-discovery. Coarse target here is fine for
+    # the local demo.
+    dns_sd_configs:
+      - names: ["worker"]
+        type: A
+        port: 9102

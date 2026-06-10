@@ -1,0 +1,10 @@
+# Auto-load the committed Relay dashboard from dashboards/relay.json.
+apiVersion: 1
+providers:
+  - name: relay
+    orgId: 1
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

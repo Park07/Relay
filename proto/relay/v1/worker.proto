@@ -1,0 +1,36 @@
+// Relay internal scheduler <-> worker contract (DESIGN.md §7.2, ADR-8).
+//
+// The scheduler is the gRPC *server*; workers dial in and open a bidirectional
+// Lease stream (ADR-2, pull-based leasing → natural backpressure): the worker
+// sends LeaseRequest{free_slots} and the scheduler pushes BatchAssignments only
+// up to that capacity, so a slow worker is never overcommitted. Results stream
+// back over ReportResults.
+//
+// `buf lint` / `buf breaking` gate this file in CI (DESIGN.md §12) so the wire
+// format cannot silently drift. The in-process mirror of these messages lives in
+// relay_core/types.py, which is what lets the whole core result run without gRPC.
+
+syntax = "proto3";
+package relay.v1;
+
+service WorkerGateway {
+  rpc Lease(stream LeaseRequest) returns (stream BatchAssignment); // bidi
+  rpc ReportResults(stream ResultItem) returns (Ack);
+  rpc Register(WorkerInfo) returns (Ack);
+}
+
+message WorkerInfo {
+  string worker_id = 1; repeated string models = 2;
+  int32 max_batch = 3; int32 max_concurrent_batches = 4; string engine = 5;
+}
+message LeaseRequest { string worker_id = 1; int32 free_slots = 2; repeated string loaded_models = 3; }
+message BatchAssignment { string batch_id = 1; string model = 2; repeated InferItem items = 3; }
+message InferItem { string request_id = 1; string input = 2; InferParams params = 3; string prefix_hash = 4; }
+message InferParams { int32 max_tokens = 1; float temperature = 2; float top_p = 3; bool stream = 4; }
+message ResultItem {
+  string request_id = 1; string batch_id = 2;
+  oneof payload { string output = 3; string token = 4; string error = 5; }
+  bool final = 6; WorkerMetrics metrics = 7;
+}
+message WorkerMetrics { float queue_wait_ms = 1; float inference_ms = 2; int32 batch_size = 3; float gpu_util = 4; bool cache_hit = 5; }
+message Ack { bool ok = 1; string detail = 2; }

@@ -1,0 +1,10 @@
+version: v1
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - DEFAULT
+  except:
+    # Allow our short field-packed message style in the design's proto.
+    - FIELD_LOWER_SNAKE_CASE

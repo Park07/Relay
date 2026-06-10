@@ -1,0 +1,88 @@
+# Relay local stack (DESIGN.md §11 Phase 0–2). One command brings up the whole
+# control plane against the mock engine, with Prometheus scraping every service
+# and Grafana pre-loading the committed dashboard.
+#
+#   make compose-up      # docker compose -f deploy/compose/docker-compose.yml up
+#
+# This is the "runs on a laptop, costs nothing" path. The CUDA vLLM validation
+# (DESIGN.md §13.2 exp. 4) is a separate rented-GPU step, not part of compose.
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: relay
+      POSTGRES_PASSWORD: relay
+      POSTGRES_DB: relay
+    ports: ["5432:5432"]
+    volumes:
+      - ../postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relay"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  scheduler:
+    build: { context: ../.., dockerfile: deploy/compose/Dockerfile.scheduler }
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      PG_DSN: postgresql://relay:relay@postgres:5432/relay
+      RELAY_GRPC_PORT: "50051"
+    depends_on:
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    ports: ["50051:50051", "9101:9101"]   # grpc + /metrics
+
+  gateway:
+    build: { context: ../.., dockerfile: deploy/compose/Dockerfile.gateway }
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      PG_DSN: postgresql://relay:relay@postgres:5432/relay
+      SCHEDULER_ADDR: scheduler:50051
+      PORT: "8080"
+    depends_on:
+      redis: { condition: service_healthy }
+      scheduler: { condition: service_started }
+    ports: ["8080:8080"]
+
+  worker:
+    build: { context: ../.., dockerfile: deploy/compose/Dockerfile.worker }
+    environment:
+      RELAY_ENGINE: mock            # cache-aware-mock | ollama | torch-mps
+      SCHEDULER_ADDR: scheduler:50051
+      RELAY_WORKER_MODELS: "qwen2.5:0.5b"
+      MAX_CONCURRENT_BATCHES: "4"
+    depends_on:
+      scheduler: { condition: service_started }
+    deploy:
+      replicas: 4                    # 4 mock workers, matching the bench fleet
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+    depends_on: [gateway, scheduler]
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+    volumes:
+      - ../../dashboards:/var/lib/grafana/dashboards:ro
+      - ./grafana-provisioning:/etc/grafana/provisioning:ro
+    ports: ["3000:3000"]
+    depends_on: [prometheus]

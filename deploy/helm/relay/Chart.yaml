@@ -1,0 +1,11 @@
+apiVersion: v2
+name: relay
+description: |
+  Relay — GPU inference serving control plane. Queue → schedule → batch → place
+  → observe → autoscale, with prefix/KV-cache-aware bounded-load routing as the
+  lead feature (DESIGN.md). This chart deploys the gateway, scheduler, and a
+  pool of workers to a k3d/k8s cluster with HPA autoscaling workers on the
+  custom `relay_queue_depth` metric (DESIGN.md ADR-9 / §11 Phase 3).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

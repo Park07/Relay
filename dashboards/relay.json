@@ -1,0 +1,134 @@
+{
+  "title": "Relay — Control Plane",
+  "uid": "relay-control-plane",
+  "tags": ["relay", "inference", "gpu"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate (RED) — by status",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(relay_request_total[1m]))",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "End-to-end latency p50 / p95 / p99",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(relay_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(relay_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(relay_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Prefix cache hit ratio — by worker (the depth headline)",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
+      "targets": [
+        {
+          "expr": "relay_prefix_cache_hit_ratio",
+          "legendFormat": "{{worker_id}} ({{policy}})"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Worker load imbalance (max/min inflight)",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        { "expr": "relay_worker_load_imbalance", "legendFormat": "imbalance" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Queue depth (drives HPA) — by priority",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum by (priority) (relay_queue_depth)",
+          "legendFormat": "{{priority}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Batch size distribution (are we filling batches?)",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(relay_batch_size_bucket[5m])))",
+          "legendFormat": "median batch size"
+        },
+        {
+          "expr": "rate(relay_batch_size_sum[5m]) / rate(relay_batch_size_count[5m])",
+          "legendFormat": "mean batch size"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Throughput — tokens/sec by worker",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "sum by (worker_id) (relay_tokens_per_second)",
+          "legendFormat": "{{worker_id}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Worker saturation — inflight (USE)",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        { "expr": "relay_worker_inflight", "legendFormat": "{{worker_id}}" }
+      ]
+    }
+  ]
+}

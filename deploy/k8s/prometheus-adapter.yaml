@@ -1,0 +1,35 @@
+# prometheus-adapter configuration (DESIGN.md ADR-9 / §11 Phase 3).
+#
+# This is the fiddly-but-the-point wiring: it tells prometheus-adapter how to
+# expose the Prometheus series `relay_queue_depth` to the Kubernetes
+# external.metrics.k8s.io API so the worker HPA can scale on it. Without this
+# rule, `kubectl get --raw /apis/external.metrics.k8s.io/...` returns nothing
+# and the HPA has no signal.
+#
+# Install (example):
+#   helm install prometheus-adapter prometheus-community/prometheus-adapter \
+#     -f deploy/k8s/prometheus-adapter.yaml
+#
+# Verify the metric is live before trusting the HPA:
+#   kubectl get --raw \
+#     "/apis/external.metrics.k8s.io/v1beta1/namespaces/default/relay_queue_depth"
+
+prometheus:
+  # Point at the in-cluster Prometheus that scrapes Relay's /metrics endpoints.
+  url: http://prometheus-server.monitoring.svc
+  port: 80
+
+rules:
+  external:
+    # Sum queue depth across all (model, priority) series into a single fleet
+    # number; the HPA's AverageValue target then divides by the worker pod count
+    # to get "queued items per worker".
+    - seriesQuery: 'relay_queue_depth'
+      resources:
+        # External metrics aren't tied to a pod/namespace label set; expose it
+        # namespaced so the HPA in `default` can read it.
+        namespaced: false
+      name:
+        matches: "relay_queue_depth"
+        as: "relay_queue_depth"
+      metricsQuery: 'sum(relay_queue_depth)'

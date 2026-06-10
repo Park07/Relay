@@ -1,0 +1,42 @@
+# Standalone HPA example (DESIGN.md ADR-9) — the same autoscaler the Helm chart
+# templates, extracted for a plain `kubectl apply` demo. Scales the worker
+# Deployment on the custom relay_queue_depth metric (via prometheus-adapter,
+# see prometheus-adapter.yaml), NOT on CPU — CPU is meaningless for GPU work.
+#
+# Prereqs: a `relay-worker` Deployment exists and prometheus-adapter is exposing
+# relay_queue_depth on external.metrics.k8s.io.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: relay-worker
+  labels:
+    app.kubernetes.io/name: relay
+    app.kubernetes.io/component: worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: relay-worker
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+    - type: External
+      external:
+        metric:
+          name: relay_queue_depth
+        target:
+          type: AverageValue
+          averageValue: "25"   # ~25 queued items per worker pod
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 4
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 120
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
