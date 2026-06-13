@@ -1,8 +1,8 @@
 # Relay — GPU Inference Serving Platform
 
-**A portfolio-grade model-serving control plane.**
 Design document v1.1 · single-author project · target platform: MacBook Air M2 (dev) + cloud GPU (validation)
-
+## Note: this is the original design spec; actual results are in the README and differ from the placeholder numbers; the soak/chaos tests are specced but not built
+This is the original design specification (v1.1), written before implementation. It records design intent and rationale. Actual measured results — including the ~530-token crossover, the 69%→95% frontier, and the 2× A40 vLLM validation — are in README.md and differ from the illustrative placeholder numbers used here. Phases 0–2 and the depth feature (§5, §8) shipped; the live-stack soak and chaos tests (§12) are specified but not yet run
 ---
 
 ## Changelog (v1.0 → v1.1)
