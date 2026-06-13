@@ -1,5 +1,8 @@
 # Relay
 
+## Why this exist in the first place:
+It came out of a known problem in multi-GPU LLM serving: when prompts share long prefixes, every worker re-computes the same prefill, which is wasteful. The industry fix is cache-aware routing — send same-prefix requests to the same worker — and it's in vLLM, SGLang, Ray Serve. But it fights load balancing, so I wanted to measure when the cache reuse is worth the imbalance. I implemented it with bounded-load consistent hashing, measured a ~530-token crossover, and validated the routing on real vLLM. The contribution is the measurement and the honesty about what's simulated vs real — not a new algorithm
+
 A GPU inference-serving **control plane**: queue → schedule → batch → place → observe → autoscale. The lead feature is **prefix / KV-cache-aware routing under bounded load** — steering same-prefix requests to the worker that already holds their KV cache, balanced by **bounded-load consistent hashing** so a hot prefix can't pin one worker. One knob, `load_cap_factor`, sweeps the whole policy space from pure cache affinity to round-robin.
 
 Design rationale, ADRs, and the decision records are in [`DESIGN.md`](DESIGN.md).
@@ -134,10 +137,23 @@ The suite pins the properties the result depends on: the ring's minimal-disrupti
 3. **The batching model is linear** (`alpha + beta·b`); real continuous batching bends the curve and chunks prefill.
 4. **The headline crossover uses single-prefix-hash routing, not longest-prefix (radix) matching.** Longest-prefix (radix) routing *is* implemented and tested separately ([`bench/results/RADIX.md`](bench/results/RADIX.md)) — a reference-counted radix tree plus `RadixPrefixRouter`, which on a broadly-shared-stem workload improves cache reuse (0.83→0.90) and load balance (imbalance 2.23→1.37) over first-block hashing. That comparison uses a block-level cost model, not measured hardware, and the radix router is not yet wired into the crossover sim; the main path still hashes character blocks rather than token blocks.
 
-## Roadmap
-
-Parked, in order: (1) characterize the crossover *surface* — sweep decode/prefill ratio and skew, and the cache-eviction-pressure regime the literature flags; (2) wire the now-implemented longest-prefix (radix) router into the crossover sim, and move from character-block to token-block hashing; (3) scale the vLLM validation past 2 workers / 0.5B and land the long-prefix (4096-token) point; (4) prefill/decode disaggregation — the measured 30.4-vs-1.3 ms/token split is exactly its motivation, and the vLLM Router already supports it.
 
 ## Where this sits
 
 Bounded-load consistent hashing is published (Google); prefix-aware routing ships today in the vLLM Router, SGLang's router, Ray Serve's `PrefixCacheAffinityRouter`, and llm-d; DéjàVu and kvcached attack the adjacent KV-cache layers. The contribution here is not a new algorithm — it's a correct from-scratch implementation plus a rigorous measurement of *when the technique pays off*.
+
+## References
+
+The techniques Relay implements are published and shipping in production systems; the contribution is the measurement, not the algorithm.
+
+**Implemented here:**
+- **Consistent Hashing with Bounded Loads** — Mirrokni, Thorup, Zadimoghaddam (Google), arXiv [1608.01350](https://arxiv.org/abs/1608.01350). The ring + load-cap mechanism in `relay_core/hashing.py` / `services/scheduler/router.py`.
+- **RadixAttention** (radix-tree prefix cache with LRU eviction) — Zheng et al., *SGLang*, arXiv [2312.07104](https://arxiv.org/abs/2312.07104). The basis for `relay_core/radix.py` / `services/scheduler/radix_router.py`.
+
+**Production systems doing prefix/KV-cache-aware routing (the context this sits in, not extended here):**
+- vLLM — production router with prefix-cache-aware routing: https://github.com/vllm-project/vllm
+- SGLang — https://github.com/sgl-project/sglang
+- Ray Serve — `PrefixCacheAffinityRouter`: https://docs.ray.io/en/latest/serve/index.html
+- llm-d — https://github.com/llm-d/llm-d
+
+**Adjacent KV-cache work (referenced as context, not implemented):** DéjàVu and kvcached target the KV-cache storage/offload layers Relay does not touch.
