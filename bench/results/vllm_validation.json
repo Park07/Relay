@@ -1,0 +1,123 @@
+{
+  "args": {
+    "workers": [
+      "http://localhost:8101",
+      "http://localhost:8102"
+    ],
+    "model": "Qwen/Qwen2.5-0.5B-Instruct",
+    "prefix_tokens": [
+      128,
+      512,
+      1024,
+      4096
+    ],
+    "policies": [
+      "round_robin",
+      "affinity"
+    ],
+    "cap_factor": 1.5,
+    "pool_size": 64,
+    "skew": 1.1,
+    "n_requests": 300,
+    "concurrency": 16,
+    "max_tokens": 32
+  },
+  "rows": [
+    {
+      "policy": "round_robin",
+      "prefix_tokens": 128,
+      "n_ok": 300,
+      "cache_hit_frac": 0.6997,
+      "p50_ms": 227.2,
+      "p99_ms": 341.9,
+      "mean_distinct_workers_per_prefix": 1.569,
+      "per_worker_counts": {
+        "w0": 151,
+        "w1": 149
+      },
+      "throughput_rps": 70.5
+    },
+    {
+      "policy": "affinity",
+      "prefix_tokens": 128,
+      "n_ok": 300,
+      "cache_hit_frac": 0.9189,
+      "p50_ms": 230.2,
+      "p99_ms": 303.0,
+      "mean_distinct_workers_per_prefix": 1.0,
+      "per_worker_counts": {
+        "w1": 232,
+        "w0": 68
+      },
+      "throughput_rps": 69.1
+    },
+    {
+      "policy": "round_robin",
+      "prefix_tokens": 512,
+      "n_ok": 300,
+      "cache_hit_frac": 0.7473,
+      "p50_ms": 207.2,
+      "p99_ms": 318.2,
+      "mean_distinct_workers_per_prefix": 1.451,
+      "per_worker_counts": {
+        "w0": 156,
+        "w1": 144
+      },
+      "throughput_rps": 76.7
+    },
+    {
+      "policy": "affinity",
+      "prefix_tokens": 512,
+      "n_ok": 300,
+      "cache_hit_frac": 0.9535,
+      "p50_ms": 205.3,
+      "p99_ms": 279.5,
+      "mean_distinct_workers_per_prefix": 1.0,
+      "per_worker_counts": {
+        "w0": 86,
+        "w1": 214
+      },
+      "throughput_rps": 82.2
+    },
+    {
+      "policy": "round_robin",
+      "prefix_tokens": 1024,
+      "n_ok": 300,
+      "cache_hit_frac": 0.7365,
+      "p50_ms": 256.4,
+      "p99_ms": 376.5,
+      "mean_distinct_workers_per_prefix": 1.549,
+      "per_worker_counts": {
+        "w1": 148,
+        "w0": 152
+      },
+      "throughput_rps": 60.1
+    },
+    {
+      "policy": "affinity",
+      "prefix_tokens": 1024,
+      "n_ok": 300,
+      "cache_hit_frac": 0.962,
+      "p50_ms": 233.5,
+      "p99_ms": 303.1,
+      "mean_distinct_workers_per_prefix": 1.0,
+      "per_worker_counts": {
+        "w0": 80,
+        "w1": 220
+      },
+      "throughput_rps": 67.0
+    },
+    {
+      "policy": "round_robin",
+      "prefix_tokens": 4096,
+      "n_ok": 0,
+      "error": "no successful responses"
+    },
+    {
+      "policy": "affinity",
+      "prefix_tokens": 4096,
+      "n_ok": 0,
+      "error": "no successful responses"
+    }
+  ]
+}
