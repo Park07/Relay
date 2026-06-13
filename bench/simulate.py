@@ -58,17 +58,17 @@ from __future__ import annotations
 
 import heapq
 import itertools
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional
 
 import numpy as np
 
+from bench.workload import WorkloadParams, ZipfianPrefixWorkload
 from relay_core.queue import LocalQueue
 from relay_core.types import InferItem, Priority, WorkerState
 from services.scheduler import batch_former as bf
-from services.scheduler.router import PURE_AFFINITY, PrefixRouter
+from services.scheduler.router import PrefixRouter
 from services.worker.engines.cache_aware_mock import CacheAwareMockEngine
-from bench.workload import WorkloadParams, ZipfianPrefixWorkload
 
 MODEL = "qwen2.5:0.5b"
 
@@ -79,7 +79,7 @@ MODEL = "qwen2.5:0.5b"
 @dataclass
 class Scenario:
     n_requests: int = 30_000
-    warmup_requests: int = 3_000          # excluded from steady-state metrics
+    warmup_requests: int = 3_000  # excluded from steady-state metrics
     n_workers: int = 4
     max_concurrent_batches: int = 4
     max_batch: int = 16
@@ -109,7 +109,7 @@ class Scenario:
 @dataclass
 class RunResult:
     policy: str
-    cap_factor: Optional[float]
+    cap_factor: float | None
     offered_rps: float
     n_completed: int
     cache_hit_rate: float
@@ -117,8 +117,8 @@ class RunResult:
     p95_ms: float
     p99_ms: float
     throughput_rps: float
-    load_imbalance: float          # max/mean items processed per worker
-    busy_imbalance: float          # max/mean busy time per worker
+    load_imbalance: float  # max/mean items processed per worker
+    busy_imbalance: float  # max/mean busy time per worker
     mean_queue_wait_ms: float
     mean_batch_size: float
     utilization: float
@@ -126,11 +126,25 @@ class RunResult:
     per_worker_items: dict[str, int]
 
     def row(self) -> dict:
-        return {k: getattr(self, k) for k in (
-            "policy", "cap_factor", "offered_rps", "n_completed",
-            "cache_hit_rate", "p50_ms", "p95_ms", "p99_ms", "throughput_rps",
-            "load_imbalance", "busy_imbalance", "mean_queue_wait_ms",
-            "mean_batch_size", "utilization")}
+        return {
+            k: getattr(self, k)
+            for k in (
+                "policy",
+                "cap_factor",
+                "offered_rps",
+                "n_completed",
+                "cache_hit_rate",
+                "p50_ms",
+                "p95_ms",
+                "p99_ms",
+                "throughput_rps",
+                "load_imbalance",
+                "busy_imbalance",
+                "mean_queue_wait_ms",
+                "mean_batch_size",
+                "utilization",
+            )
+        }
 
 
 # --------------------------------------------------------------------------- #
@@ -149,7 +163,7 @@ class RoundRobinRouter:
         self.load_fn = load_fn
         self._cycle = itertools.cycle(sorted(self.workers))
 
-    def pick(self, model: str, prefix_hash: str) -> Optional[WorkerState]:
+    def pick(self, model: str, prefix_hash: str) -> WorkerState | None:
         capable = [w for w in self.workers.values() if w.has_model(model)]
         if not capable:
             return None
@@ -169,7 +183,7 @@ class RoundRobinRouter:
 # The simulator
 # --------------------------------------------------------------------------- #
 class Simulator:
-    def __init__(self, scenario: Scenario, policy: str, cap_factor: Optional[float]):
+    def __init__(self, scenario: Scenario, policy: str, cap_factor: float | None):
         self.s = scenario
         self.policy = policy
         self.cap_factor = cap_factor
@@ -177,7 +191,9 @@ class Simulator:
         # Workers + their private cache-aware engines (cold caches).
         self.workers: list[WorkerState] = [
             WorkerState(
-                worker_id=f"w{i}", engine="cache-aware-mock", models=(MODEL,),
+                worker_id=f"w{i}",
+                engine="cache-aware-mock",
+                models=(MODEL,),
                 max_batch=scenario.max_batch,
                 max_concurrent_batches=scenario.max_concurrent_batches,
             )
@@ -186,8 +202,10 @@ class Simulator:
         self._wby: dict[str, WorkerState] = {w.worker_id: w for w in self.workers}
         self.engines: dict[str, CacheAwareMockEngine] = {
             w.worker_id: CacheAwareMockEngine(
-                alpha_ms=scenario.alpha_ms, beta_ms=scenario.beta_ms,
-                prefill_ms=scenario.prefill_ms, cache_capacity=scenario.cache_capacity,
+                alpha_ms=scenario.alpha_ms,
+                beta_ms=scenario.beta_ms,
+                prefill_ms=scenario.prefill_ms,
+                cache_capacity=scenario.cache_capacity,
                 jitter_sigma=scenario.jitter_sigma,
                 seed=scenario.engine_seed + i,
             )
@@ -200,16 +218,21 @@ class Simulator:
             for w in self.workers
         }
         self.inflight_items: dict[str, int] = {w.worker_id: 0 for w in self.workers}
-        self.budgets = {Priority.HIGH: scenario.budget_high_ms,
-                        Priority.DEFAULT: scenario.budget_default_ms}
+        self.budgets = {
+            Priority.HIGH: scenario.budget_high_ms,
+            Priority.DEFAULT: scenario.budget_default_ms,
+        }
 
         if policy == "round_robin":
             self.router = RoundRobinRouter(self.workers, load_fn=self._load)
         elif policy == "prefix":
             assert cap_factor is not None
             self.router = PrefixRouter(
-                self.workers, load_cap_factor=cap_factor, vnodes=scenario.vnodes,
-                load_fn=self._load, admit_fn=lambda w: True,
+                self.workers,
+                load_cap_factor=cap_factor,
+                vnodes=scenario.vnodes,
+                load_fn=self._load,
+                admit_fn=lambda w: True,
             )
         else:
             raise ValueError(policy)
@@ -246,8 +269,9 @@ class Simulator:
     def _load(self, w: WorkerState) -> float:
         wid = w.worker_id
         q = self.wq[wid]
-        return float(q[Priority.HIGH].size() + q[Priority.DEFAULT].size()
-                     + self.inflight_items[wid])
+        return float(
+            q[Priority.HIGH].size() + q[Priority.DEFAULT].size() + self.inflight_items[wid]
+        )
 
     # -- event helpers ----------------------------------------------------- #
     def _push(self, t: float, kind: str, payload: object) -> None:
@@ -267,13 +291,14 @@ class Simulator:
         self.batch_sizes.append(len(items))
         self.busy_ms[w.worker_id] += latency
         widx = self._wid_index[w.worker_id]
-        for it, hit in zip(items, per_item_hit):
+        for it, hit in zip(items, per_item_hit, strict=False):
             idx = self._idx_of[it.request_id]
             self.cache_hit[idx] = hit
             self.queue_wait_ms[idx] = self.clock - it.enqueue_ts
             self.item_worker[idx] = widx
-        self._push(self.clock + latency, "done",
-                   (w.worker_id, len(items), [it.request_id for it in items]))
+        self._push(
+            self.clock + latency, "done", (w.worker_id, len(items), [it.request_id for it in items])
+        )
 
     def _try_form(self, wid: str) -> None:
         """Run the §8.1 former over *this worker's* queues, starting as many
@@ -359,9 +384,7 @@ class Simulator:
             mask = steady & (self.item_worker == wi)
             cnt = int(mask.sum())
             per_worker_items[w.worker_id] = cnt
-            per_worker_hit[w.worker_id] = (
-                float(self.cache_hit[mask].mean()) if cnt else 0.0
-            )
+            per_worker_hit[w.worker_id] = float(self.cache_hit[mask].mean()) if cnt else 0.0
 
         items_arr = np.array(list(per_worker_items.values()), dtype=np.float64)
         mean_items = items_arr.mean() if items_arr.size and items_arr.mean() else 1.0
@@ -377,9 +400,10 @@ class Simulator:
             )
         else:
             full_span_s = 1e-9
-        util = float(busy_arr.sum() /
-                     (self.s.n_workers * self.s.max_concurrent_batches
-                      * full_span_s * 1000.0))
+        util = float(
+            busy_arr.sum()
+            / (self.s.n_workers * self.s.max_concurrent_batches * full_span_s * 1000.0)
+        )
 
         return RunResult(
             policy=self.policy,
@@ -393,7 +417,9 @@ class Simulator:
             throughput_rps=n_steady / span_s,
             load_imbalance=float(items_arr.max() / mean_items) if items_arr.size else 1.0,
             busy_imbalance=float(busy_arr.max() / mean_busy) if busy_arr.size else 1.0,
-            mean_queue_wait_ms=float(np.nanmean(self.queue_wait_ms[steady])) if n_steady else float("nan"),
+            mean_queue_wait_ms=float(np.nanmean(self.queue_wait_ms[steady]))
+            if n_steady
+            else float("nan"),
             mean_batch_size=float(np.mean(self.batch_sizes)) if self.batch_sizes else 0.0,
             utilization=util,
             per_worker_hit=per_worker_hit,
@@ -401,5 +427,5 @@ class Simulator:
         )
 
 
-def run_one(scenario: Scenario, policy: str, cap_factor: Optional[float]) -> RunResult:
+def run_one(scenario: Scenario, policy: str, cap_factor: float | None) -> RunResult:
     return Simulator(scenario, policy, cap_factor).run()

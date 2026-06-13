@@ -44,7 +44,6 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from bench.simulate import Scenario, run_one  # noqa: E402
-from bench.workload import WorkloadParams  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parent / "results"
 CALIB = RESULTS / "calibration.json"
@@ -55,11 +54,38 @@ FALLBACK_DECODE_MS_PER_TOK = 30.0
 FALLBACK_PREFILL_MS_PER_TOK = 1.3
 
 # Student-t two-sided 95% multipliers by degrees of freedom (n-1); 1.96 beyond 30.
-_T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365,
-        8: 2.306, 9: 2.262, 10: 2.228, 11: 2.201, 12: 2.179, 13: 2.160,
-        14: 2.145, 15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093,
-        20: 2.086, 21: 2.080, 22: 2.074, 23: 2.069, 24: 2.064, 25: 2.060,
-        26: 2.056, 27: 2.052, 28: 2.048, 29: 2.045, 30: 2.042}
+_T95 = {
+    1: 12.706,
+    2: 4.303,
+    3: 3.182,
+    4: 2.776,
+    5: 2.571,
+    6: 2.447,
+    7: 2.365,
+    8: 2.306,
+    9: 2.262,
+    10: 2.228,
+    11: 2.201,
+    12: 2.179,
+    13: 2.160,
+    14: 2.145,
+    15: 2.131,
+    16: 2.120,
+    17: 2.110,
+    18: 2.101,
+    19: 2.093,
+    20: 2.086,
+    21: 2.080,
+    22: 2.074,
+    23: 2.069,
+    24: 2.064,
+    25: 2.060,
+    26: 2.056,
+    27: 2.052,
+    28: 2.048,
+    29: 2.045,
+    30: 2.042,
+}
 
 
 def _t95(dof: int) -> float:
@@ -87,8 +113,11 @@ def load_rates() -> tuple[float, float, str]:
         dec, pre = d.get("decode_ms_per_token"), d.get("prefill_ms_per_token")
         if dec and pre:
             return float(dec), float(pre), f"measured ({d.get('source', '?')})"
-    return (FALLBACK_DECODE_MS_PER_TOK, FALLBACK_PREFILL_MS_PER_TOK,
-            "fallback (no measured rates in calibration.json)")
+    return (
+        FALLBACK_DECODE_MS_PER_TOK,
+        FALLBACK_PREFILL_MS_PER_TOK,
+        "fallback (no measured rates in calibration.json)",
+    )
 
 
 def stable_offered_rps(s: Scenario) -> float:
@@ -97,16 +126,25 @@ def stable_offered_rps(s: Scenario) -> float:
     return max(1.0, round(0.75 * cap, 3))
 
 
-def run_point(prefix_tokens: int, decode_rate: float, prefill_rate: float,
-              output_tokens: int, alpha_ms: float, n_requests: int,
-              seed_index: int) -> dict:
+def run_point(
+    prefix_tokens: int,
+    decode_rate: float,
+    prefill_rate: float,
+    output_tokens: int,
+    alpha_ms: float,
+    n_requests: int,
+    seed_index: int,
+) -> dict:
     """One (prefix_length, seed) replicate. Distinct arrival/engine/workload seeds."""
     beta_ms = decode_rate * output_tokens
     prefill_ms = prefill_rate * prefix_tokens
-    base_wl = Scenario().workload                     # keep pool_size/skew, vary seed
+    base_wl = Scenario().workload  # keep pool_size/skew, vary seed
     s = Scenario(
-        n_requests=n_requests, warmup_requests=n_requests // 10,
-        alpha_ms=alpha_ms, beta_ms=beta_ms, prefill_ms=prefill_ms,
+        n_requests=n_requests,
+        warmup_requests=n_requests // 10,
+        alpha_ms=alpha_ms,
+        beta_ms=beta_ms,
+        prefill_ms=prefill_ms,
         arrival_seed=11 + seed_index,
         engine_seed=23 + 100 * seed_index,
         workload=replace(base_wl, seed=(base_wl.seed or 0) + 1 + seed_index),
@@ -114,16 +152,20 @@ def run_point(prefix_tokens: int, decode_rate: float, prefill_rate: float,
     s.offered_rps = stable_offered_rps(s)
 
     rr = run_one(s, "round_robin", None)
-    best = min((run_one(s, "prefix", cf) for cf in PREFIX_CAPS),
-               key=lambda r: r.p99_ms)
+    best = min((run_one(s, "prefix", cf) for cf in PREFIX_CAPS), key=lambda r: r.p99_ms)
     return {
-        "prefix_tokens": prefix_tokens, "prefill_ms": prefill_ms, "beta_ms": beta_ms,
+        "prefix_tokens": prefix_tokens,
+        "prefill_ms": prefill_ms,
+        "beta_ms": beta_ms,
         "offered_rps": s.offered_rps,
-        "rr_p99": rr.p99_ms, "prefix_p99": best.p99_ms,
-        "rr_hit": rr.cache_hit_rate, "prefix_hit": best.cache_hit_rate,
-        "rr_imbalance": rr.load_imbalance, "prefix_imbalance": best.load_imbalance,
+        "rr_p99": rr.p99_ms,
+        "prefix_p99": best.p99_ms,
+        "rr_hit": rr.cache_hit_rate,
+        "prefix_hit": best.cache_hit_rate,
+        "rr_imbalance": rr.load_imbalance,
+        "prefix_imbalance": best.load_imbalance,
         "prefix_best_cap": best.cap_factor,
-        "speedup": rr.p99_ms / best.p99_ms,        # >1 ⇒ prefix wins
+        "speedup": rr.p99_ms / best.p99_ms,  # >1 ⇒ prefix wins
     }
 
 
@@ -139,53 +181,88 @@ def crossover_of(prefix_tokens: np.ndarray, speedup: np.ndarray) -> float | None
     return None
 
 
-def plot(per_len: pd.DataFrame, cx_mean: float | None, cx_ci: float,
-         prov: str, decode_rate: float, prefill_rate: float,
-         n_seeds: int, out: Path) -> None:
+def plot(
+    per_len: pd.DataFrame,
+    cx_mean: float | None,
+    cx_ci: float,
+    prov: str,
+    decode_rate: float,
+    prefill_rate: float,
+    n_seeds: int,
+    out: Path,
+) -> None:
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
     fig.suptitle(
         "Relay — when does prefix-aware routing beat round-robin?\n"
         f"rates: decode {decode_rate:.1f} ms/tok, prefill {prefill_rate:.2f} ms/tok "
         f"({prov}) · mean ± 95% CI over {n_seeds} seeds",
-        fontsize=12)
+        fontsize=12,
+    )
     x = per_len["prefix_tokens"].to_numpy()
 
     ax1.plot(x, per_len["rr_p99_mean"], "o-", color="#c44", label="round-robin")
-    ax1.fill_between(x, per_len["rr_p99_mean"] - per_len["rr_p99_ci"],
-                     per_len["rr_p99_mean"] + per_len["rr_p99_ci"], color="#c44", alpha=0.15)
+    ax1.fill_between(
+        x,
+        per_len["rr_p99_mean"] - per_len["rr_p99_ci"],
+        per_len["rr_p99_mean"] + per_len["rr_p99_ci"],
+        color="#c44",
+        alpha=0.15,
+    )
     ax1.plot(x, per_len["prefix_p99_mean"], "s-", color="#268", label="prefix-affinity (best cap)")
-    ax1.fill_between(x, per_len["prefix_p99_mean"] - per_len["prefix_p99_ci"],
-                     per_len["prefix_p99_mean"] + per_len["prefix_p99_ci"], color="#268", alpha=0.15)
-    ax1.set_xscale("log", base=2); ax1.set_xlabel("shared-prefix length (tokens)")
-    ax1.set_ylabel("p99 latency (ms)"); ax1.set_title("p99 vs prefix length")
-    ax1.legend(); ax1.grid(alpha=0.3)
+    ax1.fill_between(
+        x,
+        per_len["prefix_p99_mean"] - per_len["prefix_p99_ci"],
+        per_len["prefix_p99_mean"] + per_len["prefix_p99_ci"],
+        color="#268",
+        alpha=0.15,
+    )
+    ax1.set_xscale("log", base=2)
+    ax1.set_xlabel("shared-prefix length (tokens)")
+    ax1.set_ylabel("p99 latency (ms)")
+    ax1.set_title("p99 vs prefix length")
+    ax1.legend()
+    ax1.grid(alpha=0.3)
 
     sm, sci = per_len["speedup_mean"].to_numpy(), per_len["speedup_ci"].to_numpy()
     ax2.axhline(1.0, color="black", ls="--", lw=0.8)
     ax2.plot(x, sm, "o-", color="#3a3")
-    ax2.fill_between(x, sm - sci, sm + sci, color="#3a3", alpha=0.2,
-                     label="speedup 95% CI")
+    ax2.fill_between(x, sm - sci, sm + sci, color="#3a3", alpha=0.2, label="speedup 95% CI")
     if cx_mean is not None:
         if np.isfinite(cx_ci) and cx_ci > 0:
             ax2.axvspan(cx_mean - cx_ci, cx_mean + cx_ci, color="#555", alpha=0.15)
         ax2.axvline(cx_mean, color="#555", ls=":", lw=1.2)
-        lab = (f"crossover ≈ {cx_mean:.0f} ± {cx_ci:.0f} tok"
-               if np.isfinite(cx_ci) and cx_ci > 0 else f"crossover ≈ {cx_mean:.0f} tok")
-        ax2.annotate(lab, xy=(cx_mean, 1.0), xytext=(cx_mean, sm.max()),
-                     fontsize=9, ha="center")
-    ax2.set_xscale("log", base=2); ax2.set_xlabel("shared-prefix length (tokens)")
+        lab = (
+            f"crossover ≈ {cx_mean:.0f} ± {cx_ci:.0f} tok"
+            if np.isfinite(cx_ci) and cx_ci > 0
+            else f"crossover ≈ {cx_mean:.0f} tok"
+        )
+        ax2.annotate(lab, xy=(cx_mean, 1.0), xytext=(cx_mean, sm.max()), fontsize=9, ha="center")
+    ax2.set_xscale("log", base=2)
+    ax2.set_xlabel("shared-prefix length (tokens)")
     ax2.set_ylabel("p99 speedup  (round-robin p99 / prefix p99)")
     ax2.set_title("prefix routing pays off above the crossover")
-    ax2.legend(); ax2.grid(alpha=0.3)
+    ax2.legend()
+    ax2.grid(alpha=0.3)
 
     fig.tight_layout(rect=(0, 0, 1, 0.92))
-    fig.savefig(out, dpi=130, bbox_inches="tight"); plt.close(fig)
+    fig.savefig(out, dpi=130, bbox_inches="tight")
+    plt.close(fig)
 
 
-def write_md(per_len: pd.DataFrame, cx_mean: float | None, cx_ci: float,
-             n_cross: int, n_seeds: int, prov: str, decode_rate: float,
-             prefill_rate: float, alpha_ms: float, output_tokens: int,
-             n_requests: int, out: Path) -> None:
+def write_md(
+    per_len: pd.DataFrame,
+    cx_mean: float | None,
+    cx_ci: float,
+    n_cross: int,
+    n_seeds: int,
+    prov: str,
+    decode_rate: float,
+    prefill_rate: float,
+    alpha_ms: float,
+    output_tokens: int,
+    n_requests: int,
+    out: Path,
+) -> None:
     lo, hi = per_len.iloc[0], per_len.iloc[-1]
     if cx_mean is None:
         cx = "outside the swept range (no sign change)"
@@ -221,26 +298,41 @@ def write_md(per_len: pd.DataFrame, cx_mean: float | None, cx_ci: float,
 def main() -> None:
     ap = argparse.ArgumentParser(description="Seed-replicated prefix-routing crossover sweep.")
     ap.add_argument("--seeds", type=int, default=10, help="independent replicates per point")
-    ap.add_argument("--output-tokens", type=int, default=64,
-                    help="nominal completion length (defines one item's decode)")
-    ap.add_argument("--alpha-ms", type=float, default=30.0,
-                    help="fixed per-request overhead (NOT the noisy fitted intercept)")
+    ap.add_argument(
+        "--output-tokens",
+        type=int,
+        default=64,
+        help="nominal completion length (defines one item's decode)",
+    )
+    ap.add_argument(
+        "--alpha-ms",
+        type=float,
+        default=30.0,
+        help="fixed per-request overhead (NOT the noisy fitted intercept)",
+    )
     ap.add_argument("--n-requests", type=int, default=10_000)
     args = ap.parse_args()
 
     decode_rate, prefill_rate, prov = load_rates()
-    print(f"[crossover] rates: decode={decode_rate:.2f} ms/tok, "
-          f"prefill={prefill_rate:.2f} ms/tok  [{prov}]")
-    print(f"[crossover] {args.seeds} seeds × {len(PREFIX_TOKEN_GRID)} prefix lengths "
-          f"× {len(PREFIX_CAPS)+1} policies, {args.n_requests:,} req/run ...")
+    print(
+        f"[crossover] rates: decode={decode_rate:.2f} ms/tok, "
+        f"prefill={prefill_rate:.2f} ms/tok  [{prov}]"
+    )
+    print(
+        f"[crossover] {args.seeds} seeds × {len(PREFIX_TOKEN_GRID)} prefix lengths "
+        f"× {len(PREFIX_CAPS) + 1} policies, {args.n_requests:,} req/run ..."
+    )
 
     # raw[(prefix_tokens)] -> list of per-seed dicts
     raw: dict[int, list[dict]] = {pt: [] for pt in PREFIX_TOKEN_GRID}
     per_seed_curls: list[float] = []
     for r in range(args.seeds):
-        seed_rows = [run_point(pt, decode_rate, prefill_rate, args.output_tokens,
-                               args.alpha_ms, args.n_requests, r)
-                     for pt in PREFIX_TOKEN_GRID]
+        seed_rows = [
+            run_point(
+                pt, decode_rate, prefill_rate, args.output_tokens, args.alpha_ms, args.n_requests, r
+            )
+            for pt in PREFIX_TOKEN_GRID
+        ]
         for row in seed_rows:
             raw[row["prefix_tokens"]].append(row)
         xs = np.array([row["prefix_tokens"] for row in seed_rows], float)
@@ -248,8 +340,10 @@ def main() -> None:
         cx = crossover_of(xs, ys)
         if cx is not None:
             per_seed_curls.append(cx)
-        print(f"  seed {r + 1}/{args.seeds} done"
-              + (f" — crossover {cx:.0f} tok" if cx is not None else " — no crossing"))
+        print(
+            f"  seed {r + 1}/{args.seeds} done"
+            + (f" — crossover {cx:.0f} tok" if cx is not None else " — no crossing")
+        )
 
     # aggregate per prefix length
     per_len_rows = []
@@ -258,39 +352,65 @@ def main() -> None:
         sp_m, sp_ci = mean_ci([x["speedup"] for x in rows])
         rr_m, rr_ci = mean_ci([x["rr_p99"] for x in rows])
         px_m, px_ci = mean_ci([x["prefix_p99"] for x in rows])
-        per_len_rows.append({
-            "prefix_tokens": pt,
-            "prefill_ms": round(rows[0]["prefill_ms"], 1),
-            "beta_ms": round(rows[0]["beta_ms"], 1),
-            "offered_rps": rows[0]["offered_rps"],
-            "rr_p99_mean": round(rr_m, 1), "rr_p99_ci": round(rr_ci, 1),
-            "prefix_p99_mean": round(px_m, 1), "prefix_p99_ci": round(px_ci, 1),
-            "speedup_mean": round(sp_m, 4), "speedup_ci": round(sp_ci, 4),
-            "rr_hit_mean": round(np.mean([x["rr_hit"] for x in rows]), 3),
-            "prefix_hit_mean": round(np.mean([x["prefix_hit"] for x in rows]), 3),
-            "rr_imbalance_mean": round(np.mean([x["rr_imbalance"] for x in rows]), 3),
-            "prefix_imbalance_mean": round(np.mean([x["prefix_imbalance"] for x in rows]), 3),
-            "n_seeds": len(rows),
-        })
+        per_len_rows.append(
+            {
+                "prefix_tokens": pt,
+                "prefill_ms": round(rows[0]["prefill_ms"], 1),
+                "beta_ms": round(rows[0]["beta_ms"], 1),
+                "offered_rps": rows[0]["offered_rps"],
+                "rr_p99_mean": round(rr_m, 1),
+                "rr_p99_ci": round(rr_ci, 1),
+                "prefix_p99_mean": round(px_m, 1),
+                "prefix_p99_ci": round(px_ci, 1),
+                "speedup_mean": round(sp_m, 4),
+                "speedup_ci": round(sp_ci, 4),
+                "rr_hit_mean": round(np.mean([x["rr_hit"] for x in rows]), 3),
+                "prefix_hit_mean": round(np.mean([x["prefix_hit"] for x in rows]), 3),
+                "rr_imbalance_mean": round(np.mean([x["rr_imbalance"] for x in rows]), 3),
+                "prefix_imbalance_mean": round(np.mean([x["prefix_imbalance"] for x in rows]), 3),
+                "n_seeds": len(rows),
+            }
+        )
     per_len = pd.DataFrame(per_len_rows)
 
     cx_mean, cx_ci = mean_ci(per_seed_curls) if per_seed_curls else (None, float("nan"))
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     per_len.to_csv(RESULTS / "crossover.csv", index=False)
-    plot(per_len, cx_mean, cx_ci, prov, decode_rate, prefill_rate, args.seeds,
-         RESULTS / "crossover.png")
-    write_md(per_len, cx_mean, cx_ci, len(per_seed_curls), args.seeds, prov,
-             decode_rate, prefill_rate, args.alpha_ms, args.output_tokens,
-             args.n_requests, RESULTS / "CROSSOVER.md")
+    plot(
+        per_len,
+        cx_mean,
+        cx_ci,
+        prov,
+        decode_rate,
+        prefill_rate,
+        args.seeds,
+        RESULTS / "crossover.png",
+    )
+    write_md(
+        per_len,
+        cx_mean,
+        cx_ci,
+        len(per_seed_curls),
+        args.seeds,
+        prov,
+        decode_rate,
+        prefill_rate,
+        args.alpha_ms,
+        args.output_tokens,
+        args.n_requests,
+        RESULTS / "CROSSOVER.md",
+    )
 
     print(per_len.to_string(index=False))
     if cx_mean is not None:
-        print(f"[crossover] crossover ≈ {cx_mean:.0f} ± {cx_ci:.0f} tokens "
-              f"(95% CI, {len(per_seed_curls)}/{args.seeds} seeds crossed)")
+        print(
+            f"[crossover] crossover ≈ {cx_mean:.0f} ± {cx_ci:.0f} tokens "
+            f"(95% CI, {len(per_seed_curls)}/{args.seeds} seeds crossed)"
+        )
     else:
         print("[crossover] no crossing within the swept range")
-    print(f"[crossover] wrote {RESULTS/'crossover.csv'}, crossover.png, CROSSOVER.md")
+    print(f"[crossover] wrote {RESULTS / 'crossover.csv'}, crossover.png, CROSSOVER.md")
 
 
 if __name__ == "__main__":

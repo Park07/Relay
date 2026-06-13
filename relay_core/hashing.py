@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import bisect
 import hashlib
-from typing import Iterable, Iterator
+from collections.abc import Iterable, Iterator
 
 from relay_core.types import WorkerState
 
@@ -43,7 +43,7 @@ class BoundedLoadConsistentHashRing:
 
     def __init__(self, workers: Iterable[WorkerState], vnodes: int = 160) -> None:
         self.vnodes = vnodes
-        self._ring: dict[int, str] = {}          # position -> worker_id
+        self._ring: dict[int, str] = {}  # position -> worker_id
         self._sorted_positions: list[int] = []
         self._worker_ids: list[str] = []
         for w in workers:

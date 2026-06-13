@@ -13,15 +13,16 @@ between these and the generated ``relay.v1`` messages at the edge.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import AsyncIterator, Optional, Protocol, runtime_checkable
+from enum import StrEnum
+from typing import Protocol, runtime_checkable
 
 
 # --------------------------------------------------------------------------- #
 # Request / result payloads  (mirror: InferItem, InferParams, ResultItem)
 # --------------------------------------------------------------------------- #
-class Priority(str, Enum):
+class Priority(StrEnum):
     HIGH = "high"
     DEFAULT = "default"
 
@@ -55,9 +56,9 @@ class InferItem:
 class ResultItem:
     request_id: str
     batch_id: str
-    output: Optional[str] = None
-    token: Optional[str] = None
-    error: Optional[str] = None
+    output: str | None = None
+    token: str | None = None
+    error: str | None = None
     final: bool = True
     # WorkerMetrics, inlined:
     queue_wait_ms: float = 0.0

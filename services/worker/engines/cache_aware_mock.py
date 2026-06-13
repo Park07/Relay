@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import OrderedDict
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import numpy as np
 
@@ -66,7 +66,7 @@ class CacheAwareMockEngine:
         self._rng = np.random.default_rng(seed)
         self._loaded = loaded_models
         # OrderedDict as an LRU set: key = prefix_hash, value unused.
-        self._cache: "OrderedDict[str, None]" = OrderedDict()
+        self._cache: OrderedDict[str, None] = OrderedDict()
         self.cache_hits = 0
         self.cache_misses = 0
 
@@ -106,7 +106,7 @@ class CacheAwareMockEngine:
         per_item_hit: list[bool] = [self._resident(it.prefix_hash) for it in batch]
 
         distinct_missed = {
-            it.prefix_hash for it, hit in zip(batch, per_item_hit) if not hit
+            it.prefix_hash for it, hit in zip(batch, per_item_hit, strict=False) if not hit
         }
         for it in batch:
             self._touch(it.prefix_hash)  # everything is resident after this batch
@@ -129,7 +129,7 @@ class CacheAwareMockEngine:
         latency, per_item_hit = self.run_batch(batch)
         await asyncio.sleep(latency / 1000.0)
         bid = batch[0].request_id if batch else ""
-        for item, hit in zip(batch, per_item_hit):
+        for item, hit in zip(batch, per_item_hit, strict=False):
             yield ResultItem(
                 request_id=item.request_id,
                 batch_id=bid,

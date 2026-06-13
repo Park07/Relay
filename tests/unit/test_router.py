@@ -17,10 +17,7 @@ from services.scheduler.router import PURE_AFFINITY, PrefixRouter
 
 
 def _workers(n: int, **kw) -> list[WorkerState]:
-    return [
-        WorkerState(worker_id=f"w{i}", engine="mock", models=("m",), **kw)
-        for i in range(n)
-    ]
+    return [WorkerState(worker_id=f"w{i}", engine="mock", models=("m",), **kw) for i in range(n)]
 
 
 def test_capable_filters_by_model():

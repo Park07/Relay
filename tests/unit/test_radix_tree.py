@@ -90,7 +90,7 @@ def test_lru_eviction_drops_oldest_path():
     t.insert(blk("b"), "w0")
     t.insert(blk("c"), "w0")  # exceeds capacity 2 → "a" (oldest) evicted
     assert t.path_count("w0") == 2
-    assert t.owners_of(blk("a")) == set()      # evicted
+    assert t.owners_of(blk("a")) == set()  # evicted
     assert t.owners_of(blk("b")) == {"w0"}
     assert t.owners_of(blk("c")) == {"w0"}
 
@@ -102,8 +102,8 @@ def test_eviction_refcount_keeps_shared_stem():
     t.insert(blk("a", "b"), "w0")
     t.insert(blk("a", "c"), "w0")
     t.insert(blk("z"), "w0")  # capacity 2 → oldest path [a,b] evicted
-    assert t.owners_of(blk("a", "b")) == set()       # the evicted leaf is gone
-    assert t.owners_of(blk("a")) == {"w0"}           # stem survives via [a,c]
+    assert t.owners_of(blk("a", "b")) == set()  # the evicted leaf is gone
+    assert t.owners_of(blk("a")) == {"w0"}  # stem survives via [a,c]
     assert t.owners_of(blk("a", "c")) == {"w0"}
 
 

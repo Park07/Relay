@@ -26,7 +26,7 @@ Two execution surfaces, one latency law:
 from __future__ import annotations
 
 import asyncio
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import numpy as np
 
@@ -34,8 +34,8 @@ from relay_core.types import EngineStats, InferItem, ResultItem
 
 # Defaults are placeholders; bench/calibrate.py overwrites these from real runs
 # and writes the fitted constants to bench/results/calibration.json.
-DEFAULT_ALPHA_MS = 18.0   # fixed per-batch cost
-DEFAULT_BETA_MS = 7.5     # marginal per-item cost
+DEFAULT_ALPHA_MS = 18.0  # fixed per-batch cost
+DEFAULT_BETA_MS = 7.5  # marginal per-item cost
 
 
 class MockEngine:

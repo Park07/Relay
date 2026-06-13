@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
 
 from relay_core.types import InferItem
 from services.gateway.ratelimit import RATE_LIMIT_LUA
@@ -31,10 +31,10 @@ class RedisBackplane:
     def __init__(self, redis, pg_pool=None) -> None:
         self.redis = redis
         self.pg = pg_pool
-        self._rl_sha: Optional[str] = None
+        self._rl_sha: str | None = None
 
     @classmethod
-    def from_env(cls) -> "RedisBackplane":
+    def from_env(cls) -> RedisBackplane:
         import redis.asyncio as aioredis  # type: ignore
 
         url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -56,7 +56,7 @@ class RedisBackplane:
         return int(await self.redis.scard("workers:active"))
 
     # -- auth (Postgres source of truth, Redis cache) ---------------------- #
-    async def lookup_api_key(self, token: str) -> Optional[dict]:
+    async def lookup_api_key(self, token: str) -> dict | None:
         import hashlib
 
         key_hash = hashlib.sha256(token.encode()).hexdigest()
@@ -76,7 +76,7 @@ class RedisBackplane:
         return rec
 
     # -- idempotency ------------------------------------------------------- #
-    async def idem_get(self, key: str) -> Optional[str]:
+    async def idem_get(self, key: str) -> str | None:
         return await self.redis.get(f"idem:{key}")
 
     async def idem_put(self, key: str, job_id: str, ttl_s: int = 86_400) -> None:
@@ -106,7 +106,7 @@ class RedisBackplane:
         await self.redis.expire(f"job:{item.request_id}", 3600)
 
     # -- jobs -------------------------------------------------------------- #
-    async def get_job(self, job_id: str) -> Optional[dict]:
+    async def get_job(self, job_id: str) -> dict | None:
         rec = await self.redis.hgetall(f"job:{job_id}")
         if not rec:
             return None
@@ -117,7 +117,7 @@ class RedisBackplane:
             rec["cache_hit"] = rec["cache_hit"] in ("1", "true", "True")
         return rec
 
-    async def wait_job(self, job_id: str, timeout_s: float) -> Optional[dict]:
+    async def wait_job(self, job_id: str, timeout_s: float) -> dict | None:
         # Subscribe to a per-job completion channel the scheduler publishes to;
         # fall back to polling the hash so a missed publish still resolves.
         deadline = time.monotonic() + timeout_s

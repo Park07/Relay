@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import asyncio
 
-from relay_core.metrics import PREFIX_CACHE_HIT_RATIO, QUEUE_WAIT
+from relay_core.metrics import QUEUE_WAIT
 from relay_core.types import WorkerState
 
 try:  # pragma: no cover - only importable after `make proto`

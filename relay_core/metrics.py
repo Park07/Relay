@@ -25,8 +25,9 @@ except Exception:  # pragma: no cover - exercised only when dep is absent
 
     class _Noop:
         def __init__(self, *a, **k) -> None: ...
-        def labels(self, *a, **k) -> "_Noop":
+        def labels(self, *a, **k) -> _Noop:
             return self
+
         def inc(self, *a, **k) -> None: ...
         def dec(self, *a, **k) -> None: ...
         def set(self, *a, **k) -> None: ...
@@ -73,12 +74,17 @@ WORKER_INFLIGHT = Gauge("relay_worker_inflight", "Saturation (USE).", ["worker_i
 WORKER_GPU_UTIL = Gauge(
     "relay_worker_gpu_util", "Utilization (USE) — credible only on CUDA.", ["worker_id"]
 )
-TOKENS_PER_SECOND = Gauge(
-    "relay_tokens_per_second", "LLM throughput.", ["worker_id", "model"]
-)
+TOKENS_PER_SECOND = Gauge("relay_tokens_per_second", "LLM throughput.", ["worker_id", "model"])
 
 __all__ = [
-    "REQUEST_TOTAL", "REQUEST_DURATION", "QUEUE_WAIT", "QUEUE_DEPTH", "BATCH_SIZE",
-    "PREFIX_CACHE_HIT_RATIO", "WORKER_LOAD_IMBALANCE", "WORKER_INFLIGHT",
-    "WORKER_GPU_UTIL", "TOKENS_PER_SECOND",
+    "REQUEST_TOTAL",
+    "REQUEST_DURATION",
+    "QUEUE_WAIT",
+    "QUEUE_DEPTH",
+    "BATCH_SIZE",
+    "PREFIX_CACHE_HIT_RATIO",
+    "WORKER_LOAD_IMBALANCE",
+    "WORKER_INFLIGHT",
+    "WORKER_GPU_UTIL",
+    "TOKENS_PER_SECOND",
 ]

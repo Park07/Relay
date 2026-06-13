@@ -39,8 +39,18 @@ _TEMPLATES = [
     "methodology. Section 3: findings. Use only this document to answer. ",
 ]
 _TOPICS = [
-    "billing", "networking", "kubernetes", "genomics", "tax law", "robotics",
-    "logistics", "semiconductors", "climate", "linguistics", "finance", "biology",
+    "billing",
+    "networking",
+    "kubernetes",
+    "genomics",
+    "tax law",
+    "robotics",
+    "logistics",
+    "semiconductors",
+    "climate",
+    "linguistics",
+    "finance",
+    "biology",
 ]
 
 

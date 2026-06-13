@@ -83,7 +83,7 @@ def test_lru_touch_keeps_recently_used():
     e.run_batch([_item("C", "4")])  # evicts B (now LRU) → [A, C]
     _, hit_a = e.run_batch([_item("A", "5")])
     _, hit_b = e.run_batch([_item("B", "6")])
-    assert hit_a == [True]   # A survived because it was touched
+    assert hit_a == [True]  # A survived because it was touched
     assert hit_b == [False]  # B was evicted
 
 

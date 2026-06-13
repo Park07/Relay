@@ -25,15 +25,14 @@ import argparse
 import json
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 import pandas as pd
-
-import matplotlib
 
 matplotlib.use("Agg")  # headless
 import matplotlib.pyplot as plt  # noqa: E402
 
-from bench.simulate import Scenario, RunResult, run_one  # noqa: E402
+from bench.simulate import RunResult, Scenario, run_one  # noqa: E402
 from bench.workload import ZipfianPrefixWorkload  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parent / "results"
@@ -59,7 +58,7 @@ def build_scenario(quick: bool) -> tuple[Scenario, str]:
     if cal:
         kw["alpha_ms"] = float(cal["alpha_ms"])
         kw["beta_ms"] = float(cal["beta_ms"])
-        if "prefill_ms" in cal:                       # newer calibrations carry it
+        if "prefill_ms" in cal:  # newer calibrations carry it
             kw["prefill_ms"] = float(cal["prefill_ms"])
         measured = bool(cal.get("measured", False))
         src = f"calibration.json (source={cal.get('source', 'unknown')})"
@@ -119,15 +118,35 @@ def plot_frontier(df: pd.DataFrame, s: Scenario, out: Path) -> None:
 
     # Panel 1: cache hit rate vs load imbalance (the core trade) ------------ #
     ax = axes[0]
-    ax.scatter(finite.load_imbalance, finite.cache_hit_rate, c=caps, cmap=cmap,
-               norm=norm, s=70, zorder=3)
+    ax.scatter(
+        finite.load_imbalance, finite.cache_hit_rate, c=caps, cmap=cmap, norm=norm, s=70, zorder=3
+    )
     for _, r in finite.iterrows():
-        ax.annotate(f"{r.cap_factor:g}", (r.load_imbalance, r.cache_hit_rate),
-                    textcoords="offset points", xytext=(6, -2), fontsize=8)
-    ax.scatter([inf_row.load_imbalance], [inf_row.cache_hit_rate], marker="*",
-               s=240, color="crimson", zorder=4, label="prefix, cap=inf (pure affinity)")
-    ax.scatter([rr.load_imbalance], [rr.cache_hit_rate], marker="s", s=90,
-               color="black", zorder=4, label="round-robin (balance)")
+        ax.annotate(
+            f"{r.cap_factor:g}",
+            (r.load_imbalance, r.cache_hit_rate),
+            textcoords="offset points",
+            xytext=(6, -2),
+            fontsize=8,
+        )
+    ax.scatter(
+        [inf_row.load_imbalance],
+        [inf_row.cache_hit_rate],
+        marker="*",
+        s=240,
+        color="crimson",
+        zorder=4,
+        label="prefix, cap=inf (pure affinity)",
+    )
+    ax.scatter(
+        [rr.load_imbalance],
+        [rr.cache_hit_rate],
+        marker="s",
+        s=90,
+        color="black",
+        zorder=4,
+        label="round-robin (balance)",
+    )
     ax.set_xlabel("load imbalance  (max/mean items per worker)")
     ax.set_ylabel("cache-hit rate")
     ax.set_title("hit-rate vs imbalance\n(label = load_cap_factor)")
@@ -136,12 +155,11 @@ def plot_frontier(df: pd.DataFrame, s: Scenario, out: Path) -> None:
 
     # Panel 2: p99 latency vs load imbalance -------------------------------- #
     ax = axes[1]
-    ax.scatter(finite.load_imbalance, finite.p99_ms, c=caps, cmap=cmap, norm=norm,
-               s=70, zorder=3)
-    ax.scatter([inf_row.load_imbalance], [inf_row.p99_ms], marker="*", s=240,
-               color="crimson", zorder=4)
-    ax.scatter([rr.load_imbalance], [rr.p99_ms], marker="s", s=90, color="black",
-               zorder=4)
+    ax.scatter(finite.load_imbalance, finite.p99_ms, c=caps, cmap=cmap, norm=norm, s=70, zorder=3)
+    ax.scatter(
+        [inf_row.load_imbalance], [inf_row.p99_ms], marker="*", s=240, color="crimson", zorder=4
+    )
+    ax.scatter([rr.load_imbalance], [rr.p99_ms], marker="s", s=90, color="black", zorder=4)
     ax.axhline(rr.p99_ms, color="black", ls="--", lw=0.8, alpha=0.5)
     ax.set_xlabel("load imbalance  (max/mean items per worker)")
     ax.set_ylabel("p99 latency (ms)")
@@ -174,8 +192,9 @@ def plot_frontier(df: pd.DataFrame, s: Scenario, out: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
-def write_results_md(df: pd.DataFrame, by: dict[str, RunResult], s: Scenario,
-                     cal_src: str, out: Path) -> None:
+def write_results_md(
+    df: pd.DataFrame, by: dict[str, RunResult], s: Scenario, cal_src: str, out: Path
+) -> None:
     rr = by["round_robin"]
     af = by["affinity"]
     knee = by.get("knee", af)
@@ -201,9 +220,9 @@ def write_results_md(df: pd.DataFrame, by: dict[str, RunResult], s: Scenario,
     )
     lines.append("## Headline\n")
     lines.append(
-        f"Sweeping the router's single knob `load_cap_factor` from pure affinity "
-        f"(cap = inf) toward round-robin traces a clean Pareto frontier between "
-        f"**KV-cache locality** and **load balance**:\n"
+        "Sweeping the router's single knob `load_cap_factor` from pure affinity "
+        "(cap = inf) toward round-robin traces a clean Pareto frontier between "
+        "**KV-cache locality** and **load balance**:\n"
     )
     lines.append(
         f"- **Cache-hit rate** rises from **{rr.cache_hit_rate:.1%}** (round-robin) "
@@ -235,11 +254,19 @@ def write_results_md(df: pd.DataFrame, by: dict[str, RunResult], s: Scenario,
         return "inf" if not np.isfinite(row.cap_factor) else f"{row.cap_factor:g}"
 
     show["cap_factor"] = show.apply(cap_str, axis=1)
-    cols = ["policy", "cap_factor", "cache_hit_rate", "p50_ms", "p95_ms",
-            "p99_ms", "throughput_rps", "load_imbalance", "mean_batch_size",
-            "utilization"]
-    hdr = ["policy", "cap", "hit", "p50", "p95", "p99", "thrpt", "imbal",
-           "batch", "util"]
+    cols = [
+        "policy",
+        "cap_factor",
+        "cache_hit_rate",
+        "p50_ms",
+        "p95_ms",
+        "p99_ms",
+        "throughput_rps",
+        "load_imbalance",
+        "mean_batch_size",
+        "utilization",
+    ]
+    hdr = ["policy", "cap", "hit", "p50", "p95", "p99", "thrpt", "imbal", "batch", "util"]
     lines.append("| " + " | ".join(hdr) + " |")
     lines.append("|" + "|".join(["---"] * len(hdr)) + "|")
     for _, r in show[cols].iterrows():
@@ -310,15 +337,16 @@ def write_results_md(df: pd.DataFrame, by: dict[str, RunResult], s: Scenario,
 # --------------------------------------------------------------------------- #
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--quick", action="store_true",
-                    help="fast 8k-request smoke sweep")
+    ap.add_argument("--quick", action="store_true", help="fast 8k-request smoke sweep")
     args = ap.parse_args()
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     s, cal_src = build_scenario(args.quick)
-    print(f"[run] scenario: {s.n_requests:,} reqs, offered {s.offered_rps:.0f} rps, "
-          f"{s.n_workers}x{s.max_concurrent_batches} workers, cache={s.cache_capacity}; "
-          f"alpha/beta from {cal_src}")
+    print(
+        f"[run] scenario: {s.n_requests:,} reqs, offered {s.offered_rps:.0f} rps, "
+        f"{s.n_workers}x{s.max_concurrent_batches} workers, cache={s.cache_capacity}; "
+        f"alpha/beta from {cal_src}"
+    )
 
     df, by = run_sweep(s)
 
@@ -336,12 +364,14 @@ def main() -> None:
 
     rr, af = by["round_robin"], by["affinity"]
     knee = by.get("knee", af)
-    print(f"[run] DONE | RR hit={rr.cache_hit_rate:.3f} p99={rr.p99_ms:.0f}ms "
-          f"imbal={rr.load_imbalance:.2f}  ->  "
-          f"knee(cap={knee.cap_factor:g}) hit={knee.cache_hit_rate:.3f} "
-          f"p99={knee.p99_ms:.0f}ms imbal={knee.load_imbalance:.2f}  ->  "
-          f"affinity hit={af.cache_hit_rate:.3f} p99={af.p99_ms:.0f}ms "
-          f"imbal={af.load_imbalance:.2f}")
+    print(
+        f"[run] DONE | RR hit={rr.cache_hit_rate:.3f} p99={rr.p99_ms:.0f}ms "
+        f"imbal={rr.load_imbalance:.2f}  ->  "
+        f"knee(cap={knee.cap_factor:g}) hit={knee.cache_hit_rate:.3f} "
+        f"p99={knee.p99_ms:.0f}ms imbal={knee.load_imbalance:.2f}  ->  "
+        f"affinity hit={af.cache_hit_rate:.3f} p99={af.p99_ms:.0f}ms "
+        f"imbal={af.load_imbalance:.2f}"
+    )
 
 
 if __name__ == "__main__":

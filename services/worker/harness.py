@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from relay_core.metrics import TOKENS_PER_SECOND, WORKER_GPU_UTIL
 from relay_core.types import BatchAssignment, Engine, ResultItem, WorkerState

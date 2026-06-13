@@ -25,8 +25,11 @@ from services.scheduler.batch_former import (
 def _item(rid: str, enqueue_ts: float, priority: Priority = Priority.DEFAULT) -> InferItem:
     # Give an explicit prefix_hash so construction does not depend on hashing.
     return InferItem(
-        request_id=rid, input=f"x-{rid}", prefix_hash=f"ph-{rid}",
-        enqueue_ts=enqueue_ts, priority=priority,
+        request_id=rid,
+        input=f"x-{rid}",
+        prefix_hash=f"ph-{rid}",
+        enqueue_ts=enqueue_ts,
+        priority=priority,
     )
 
 

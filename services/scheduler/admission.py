@@ -18,13 +18,13 @@ are driven by one consistent signal.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class Admission(str, Enum):
+class Admission(StrEnum):
     ACCEPT = "accept"
     DEGRADED = "degraded"  # accepted, but over the soft limit
-    SHED = "shed"          # rejected (429)
+    SHED = "shed"  # rejected (429)
 
 
 @dataclass(slots=True)

@@ -22,9 +22,7 @@ def main() -> None:  # pragma: no cover - live entry point
     start_http_server(int(os.getenv("RELAY_METRICS_PORT", "9102")))
 
     engine = build_engine_from_env()
-    models = tuple(
-        m for m in os.getenv("RELAY_WORKER_MODELS", "qwen2.5:0.5b").split(",") if m
-    )
+    models = tuple(m for m in os.getenv("RELAY_WORKER_MODELS", "qwen2.5:0.5b").split(",") if m)
     harness = WorkerHarness(
         engine=engine,
         worker_id=os.getenv("RELAY_WORKER_ID", f"w-{uuid.uuid4().hex[:8]}"),

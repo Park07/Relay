@@ -18,10 +18,8 @@ from __future__ import annotations
 import asyncio
 import itertools
 import os
-import time
 
-from relay_core.metrics import PREFIX_CACHE_HIT_RATIO, QUEUE_DEPTH, WORKER_LOAD_IMBALANCE
-from relay_core.types import Priority
+from relay_core.metrics import WORKER_LOAD_IMBALANCE
 from services.scheduler.dispatch import LeaseManager
 from services.scheduler.router import PrefixRouter
 
@@ -66,9 +64,7 @@ class SchedulerServer:
         from services.scheduler.grpc_servicer import WorkerGatewayServicer  # type: ignore
 
         server = grpc.aio.server()
-        pbg.add_WorkerGatewayServicer_to_server(
-            WorkerGatewayServicer(self), server
-        )
+        pbg.add_WorkerGatewayServicer_to_server(WorkerGatewayServicer(self), server)
         port = os.getenv("RELAY_GRPC_PORT", "50051")
         server.add_insecure_port(f"0.0.0.0:{port}")
         await server.start()

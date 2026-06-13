@@ -22,8 +22,6 @@ NEEDS REDIS: imports ``redis.asyncio``; excluded from the default import path.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from relay_core.types import InferItem, InferParams, Priority
 
 

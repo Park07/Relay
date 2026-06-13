@@ -23,7 +23,7 @@ box, not in CI and not on the Mac. Excluded from the default import path.
 from __future__ import annotations
 
 import time
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from relay_core.types import EngineStats, InferItem, ResultItem
 
@@ -50,7 +50,7 @@ class VLLMEngine:
         args = AsyncEngineArgs(
             model=self.model,
             enable_prefix_caching=True,  # <-- verify flag name/behaviour on arrival
-            disable_log_stats=False,     # we want the cache-hit counters
+            disable_log_stats=False,  # we want the cache-hit counters
         )
         self._llm = AsyncLLMEngine.from_engine_args(args)
         self._loaded = (self.model,)

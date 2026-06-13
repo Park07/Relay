@@ -29,8 +29,8 @@ slide smoothly between the two extremes.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from statistics import mean
-from typing import Callable, Iterable, Optional
 
 from relay_core.hashing import BoundedLoadConsistentHashRing
 from relay_core.types import WorkerState
@@ -79,7 +79,7 @@ class PrefixRouter:
         return [w for w in self.workers.values() if w.has_model(model)]
 
     # -- the placement decision (DESIGN.md §8.2) --------------------------- #
-    def pick(self, model: str, prefix_hash: str) -> Optional[WorkerState]:
+    def pick(self, model: str, prefix_hash: str) -> WorkerState | None:
         capable = self.capable(model)
         if not capable:
             return None
@@ -106,5 +106,5 @@ class PrefixRouter:
         return None  # everyone capped/full → backpressure; caller retries next tick
 
     # -- introspection for the harness ------------------------------------- #
-    def affinity_owner(self, prefix_hash: str) -> Optional[str]:
+    def affinity_owner(self, prefix_hash: str) -> str | None:
         return self.ring.head(prefix_hash)

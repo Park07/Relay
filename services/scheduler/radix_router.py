@@ -22,8 +22,8 @@ The tree carries no load state; this router owns the cap logic, mirroring how
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from statistics import mean
-from typing import Callable, Iterable, Optional
 
 from relay_core.hashing import BoundedLoadConsistentHashRing
 from relay_core.radix import RadixPrefixTree
@@ -61,7 +61,7 @@ class RadixPrefixRouter:
         return [w for w in self.workers.values() if w.has_model(model)]
 
     # -- placement --------------------------------------------------------- #
-    def pick(self, model: str, blocks: tuple[str, ...]) -> Optional[WorkerState]:
+    def pick(self, model: str, blocks: tuple[str, ...]) -> WorkerState | None:
         capable = self.capable(model)
         if not capable:
             return None
@@ -71,10 +71,9 @@ class RadixPrefixRouter:
         else:
             avg_load = mean(self.load_fn(w) for w in capable)
             cap = self.cap_factor * max(avg_load, 1.0)
-            under_cap = {w.worker_id for w in capable
-                         if self.load_fn(w) < cap and self.admit_fn(w)}
+            under_cap = {w.worker_id for w in capable if self.load_fn(w) < cap and self.admit_fn(w)}
 
-        chosen: Optional[WorkerState] = None
+        chosen: WorkerState | None = None
         if blocks and under_cap:
             wid, depth = self.tree.match_longest(blocks, is_eligible=under_cap.__contains__)
             if wid is not None and depth > 0:
@@ -103,7 +102,7 @@ class RadixPrefixRouter:
         return chosen
 
     # -- introspection ----------------------------------------------------- #
-    def affinity_owner(self, blocks: tuple[str, ...]) -> Optional[str]:
+    def affinity_owner(self, blocks: tuple[str, ...]) -> str | None:
         """Longest-prefix owner ignoring load (the natural placement); falls back
         to the ring head when no prefix is cached. For tests / placement checks."""
         if blocks:

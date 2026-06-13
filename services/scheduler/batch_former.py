@@ -22,8 +22,8 @@ unit tests all exercise the *same* logic rather than three lookalikes.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Callable, Mapping, Optional
 
 from relay_core.queue import Queue
 from relay_core.types import BatchAssignment, InferItem, Priority, WorkerState
@@ -45,9 +45,7 @@ def slack_ms(head: Head, now_ms: float, budgets: Mapping[Priority, float]) -> fl
     return (head.item.enqueue_ts + budgets[head.priority]) - now_ms
 
 
-def most_urgent(
-    heads: list[Head], now_ms: float, budgets: Mapping[Priority, float]
-) -> Optional[Head]:
+def most_urgent(heads: list[Head], now_ms: float, budgets: Mapping[Priority, float]) -> Head | None:
     """The head item closest to (or past) its deadline across all queues."""
     if not heads:
         return None
@@ -56,7 +54,7 @@ def most_urgent(
 
 def should_dispatch(
     total_queued: int,
-    urgent: Optional[Head],
+    urgent: Head | None,
     now_ms: float,
     max_batch: int,
     budgets: Mapping[Priority, float],
@@ -69,9 +67,7 @@ def should_dispatch(
     return slack_ms(urgent, now_ms, budgets) <= 0.0
 
 
-def assemble_batch(
-    queues: Mapping[Priority, Queue], cap: int
-) -> list[InferItem]:
+def assemble_batch(queues: Mapping[Priority, Queue], cap: int) -> list[InferItem]:
     """Fill up to ``cap`` items, high priority first, then top up with default."""
     if cap <= 0:
         return []
@@ -99,8 +95,8 @@ def worker_batch_cap(worker: WorkerState, max_batch: int) -> int:
 async def batch_former(
     model: str,
     queues: Mapping[Priority, Queue],
-    pick_worker: Callable[[str, str], Optional[WorkerState]],
-    dispatch: Callable[[WorkerState, BatchAssignment], "asyncio.Future | None"],
+    pick_worker: Callable[[str, str], WorkerState | None],
+    dispatch: Callable[[WorkerState, BatchAssignment], asyncio.Future | None],
     now_ms: Callable[[], float],
     make_batch_id: Callable[[], str],
     *,

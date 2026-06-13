@@ -14,10 +14,7 @@ from relay_core.types import WorkerState
 
 
 def _workers(n: int) -> list[WorkerState]:
-    return [
-        WorkerState(worker_id=f"w{i}", engine="mock", models=("m",))
-        for i in range(n)
-    ]
+    return [WorkerState(worker_id=f"w{i}", engine="mock", models=("m",)) for i in range(n)]
 
 
 def test_walk_yields_all_workers_once_in_stable_order():

@@ -46,14 +46,15 @@ from pathlib import Path
 import numpy as np
 import requests
 
-from relay_core.types import WorkerState
-from services.scheduler.router import PURE_AFFINITY, PrefixRouter, default_load
-from relay_core.types import prefix_hash_of
+from relay_core.types import WorkerState, prefix_hash_of
+from services.scheduler.router import PURE_AFFINITY, PrefixRouter
 
 RESULTS = Path(__file__).resolve().parent / "results"
 
-_WORDS = ("alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo "
-          "lima mike november oscar papa quebec romeo sierra tango").split()
+_WORDS = (
+    "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo "
+    "lima mike november oscar papa quebec romeo sierra tango"
+).split()
 
 
 def make_prefix(prefix_id: int, target_tokens: int, rng: np.random.Generator) -> str:
@@ -70,9 +71,15 @@ class LiveRouter:
     def __init__(self, worker_urls: list[str], policy: str, cap_factor: float):
         self.urls = {f"w{i}": u for i, u in enumerate(worker_urls)}
         self.model_tag = "m"
-        self.states = [WorkerState(worker_id=f"w{i}", engine="vllm", models=(self.model_tag,),
-                                   max_concurrent_batches=10_000)
-                       for i in range(len(worker_urls))]
+        self.states = [
+            WorkerState(
+                worker_id=f"w{i}",
+                engine="vllm",
+                models=(self.model_tag,),
+                max_concurrent_batches=10_000,
+            )
+            for i in range(len(worker_urls))
+        ]
         self.inflight = {s.worker_id: 0 for s in self.states}
         self.lock = threading.Lock()
         self.policy = policy
@@ -86,8 +93,8 @@ class LiveRouter:
             self.router = None
         else:  # "affinity" or "bounded"
             self.router = PrefixRouter(
-                self.states, load_cap_factor=cap_factor,
-                load_fn=load_fn, admit_fn=lambda w: True)
+                self.states, load_cap_factor=cap_factor, load_fn=load_fn, admit_fn=lambda w: True
+            )
 
     def pick(self, prefix_hash: str) -> str:
         with self.lock:
@@ -110,20 +117,31 @@ class LiveRouter:
             self.inflight[wid] -= 1
 
 
-def run_policy(worker_urls, model, policy, cap_factor, prefix_tokens,
-               pool_size, skew, n_requests, concurrency, max_tokens):
+def run_policy(
+    worker_urls,
+    model,
+    policy,
+    cap_factor,
+    prefix_tokens,
+    pool_size,
+    skew,
+    n_requests,
+    concurrency,
+    max_tokens,
+):
     rng = np.random.default_rng(0)
     prefixes = [make_prefix(i, prefix_tokens, rng) for i in range(pool_size)]
     # finite-Zipf sampling of prefix ids (same access pattern across policies)
     ranks = np.arange(1, pool_size + 1, dtype=np.float64)
-    pmf = (1.0 / ranks ** skew); pmf /= pmf.sum()
-    seq_rng = np.random.default_rng(12345)          # fixed: identical sequence per policy
+    pmf = 1.0 / ranks**skew
+    pmf /= pmf.sum()
+    seq_rng = np.random.default_rng(12345)  # fixed: identical sequence per policy
     prefix_ids = seq_rng.choice(pool_size, size=n_requests, p=pmf)
 
     lr = LiveRouter(worker_urls, policy, cap_factor)
     results: list[dict] = []
     res_lock = threading.Lock()
-    idx = itertools.count()
+    itertools.count()
     counter = threading.Lock()
     next_i = [0]
 
@@ -149,9 +167,16 @@ def run_policy(worker_urls, model, policy, cap_factor, prefix_tokens,
             cached = ptok = -1
             ok = False
             try:
-                r = requests.post(f"{url}/v1/completions", json={
-                    "model": model, "prompt": prompt,
-                    "max_tokens": max_tokens, "temperature": 0.0}, timeout=180)
+                r = requests.post(
+                    f"{url}/v1/completions",
+                    json={
+                        "model": model,
+                        "prompt": prompt,
+                        "max_tokens": max_tokens,
+                        "temperature": 0.0,
+                    },
+                    timeout=180,
+                )
                 d = r.json()
                 u = d.get("usage", {})
                 ptok = int(u.get("prompt_tokens", 0))
@@ -159,14 +184,22 @@ def run_policy(worker_urls, model, policy, cap_factor, prefix_tokens,
                 cached = int(ptd.get("cached_tokens", 0) or 0)
                 ok = "choices" in d
             except Exception as e:  # noqa: BLE001
-                err = str(e)[:80]
+                str(e)[:80]
             finally:
                 lr.done(wid)
             lat = (time.perf_counter() - t0) * 1000.0
             with res_lock:
-                results.append({"i": i, "prefix_id": pid, "worker": wid,
-                                "prompt_tokens": ptok, "cached_tokens": cached,
-                                "latency_ms": lat, "ok": ok})
+                results.append(
+                    {
+                        "i": i,
+                        "prefix_id": pid,
+                        "worker": wid,
+                        "prompt_tokens": ptok,
+                        "cached_tokens": cached,
+                        "latency_ms": lat,
+                        "ok": ok,
+                    }
+                )
 
     threads = [threading.Thread(target=worker_loop) for _ in range(concurrency)]
     t_start = time.perf_counter()
@@ -178,8 +211,12 @@ def run_policy(worker_urls, model, policy, cap_factor, prefix_tokens,
 
     ok = [r for r in results if r["ok"] and r["prompt_tokens"] > 0]
     if not ok:
-        return {"policy": policy, "prefix_tokens": prefix_tokens, "n_ok": 0,
-                "error": "no successful responses"}
+        return {
+            "policy": policy,
+            "prefix_tokens": prefix_tokens,
+            "n_ok": 0,
+            "error": "no successful responses",
+        }
     lat = np.array([r["latency_ms"] for r in ok])
     tot_prompt = sum(r["prompt_tokens"] for r in ok)
     tot_cached = sum(r["cached_tokens"] for r in ok)
@@ -192,7 +229,9 @@ def run_policy(worker_urls, model, policy, cap_factor, prefix_tokens,
     for r in ok:
         per_worker[r["worker"]] = per_worker.get(r["worker"], 0) + 1
     return {
-        "policy": policy, "prefix_tokens": prefix_tokens, "n_ok": len(ok),
+        "policy": policy,
+        "prefix_tokens": prefix_tokens,
+        "n_ok": len(ok),
         "cache_hit_frac": round(tot_cached / tot_prompt, 4) if tot_prompt else 0.0,
         "p50_ms": round(float(np.percentile(lat, 50)), 1),
         "p99_ms": round(float(np.percentile(lat, 99)), 1),
@@ -204,13 +243,26 @@ def run_policy(worker_urls, model, policy, cap_factor, prefix_tokens,
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Validate Relay routing on real vLLM workers.")
-    ap.add_argument("--workers", nargs="+", required=True,
-                    help="vLLM base URLs, e.g. http://localhost:8001 http://localhost:8002")
+    ap.add_argument(
+        "--workers",
+        nargs="+",
+        required=True,
+        help="vLLM base URLs, e.g. http://localhost:8001 http://localhost:8002",
+    )
     ap.add_argument("--model", required=True, help="model id served by the workers")
-    ap.add_argument("--prefix-tokens", nargs="+", type=int, default=[256, 1024, 4096],
-                    help="shared-prefix lengths to sweep")
-    ap.add_argument("--policies", nargs="+", default=["round_robin", "affinity"],
-                    choices=["round_robin", "affinity", "bounded"])
+    ap.add_argument(
+        "--prefix-tokens",
+        nargs="+",
+        type=int,
+        default=[256, 1024, 4096],
+        help="shared-prefix lengths to sweep",
+    )
+    ap.add_argument(
+        "--policies",
+        nargs="+",
+        default=["round_robin", "affinity"],
+        choices=["round_robin", "affinity", "bounded"],
+    )
     ap.add_argument("--cap-factor", type=float, default=1.5, help="cap for the 'bounded' policy")
     ap.add_argument("--pool-size", type=int, default=64)
     ap.add_argument("--skew", type=float, default=1.1)
@@ -220,22 +272,35 @@ def main() -> None:
     args = ap.parse_args()
 
     print(f"[validate] workers={args.workers} model={args.model}")
-    print(f"[validate] sweep prefix_tokens={args.prefix_tokens} policies={args.policies} "
-          f"n={args.n_requests} concurrency={args.concurrency}\n")
+    print(
+        f"[validate] sweep prefix_tokens={args.prefix_tokens} policies={args.policies} "
+        f"n={args.n_requests} concurrency={args.concurrency}\n"
+    )
 
     rows: list[dict] = []
     for L in args.prefix_tokens:
         for pol in args.policies:
             cap = PURE_AFFINITY if pol == "affinity" else args.cap_factor
-            r = run_policy(args.workers, args.model, pol, cap, L,
-                           args.pool_size, args.skew, args.n_requests,
-                           args.concurrency, args.max_tokens)
+            r = run_policy(
+                args.workers,
+                args.model,
+                pol,
+                cap,
+                L,
+                args.pool_size,
+                args.skew,
+                args.n_requests,
+                args.concurrency,
+                args.max_tokens,
+            )
             rows.append(r)
             if r.get("n_ok"):
-                print(f"  L={L:>5} {pol:<11} hit={r['cache_hit_frac']:.3f} "
-                      f"p50={r['p50_ms']:>7.1f} p99={r['p99_ms']:>7.1f} "
-                      f"distinct_workers/prefix={r['mean_distinct_workers_per_prefix']:.2f} "
-                      f"{r['per_worker_counts']}")
+                print(
+                    f"  L={L:>5} {pol:<11} hit={r['cache_hit_frac']:.3f} "
+                    f"p50={r['p50_ms']:>7.1f} p99={r['p99_ms']:>7.1f} "
+                    f"distinct_workers/prefix={r['mean_distinct_workers_per_prefix']:.2f} "
+                    f"{r['per_worker_counts']}"
+                )
             else:
                 print(f"  L={L:>5} {pol:<11} FAILED: {r.get('error')}")
 
@@ -247,16 +312,20 @@ def main() -> None:
         if rr and af and af["p99_ms"] > 0:
             sp = rr["p99_ms"] / af["p99_ms"]
             tag = "affinity wins" if sp > 1 else "round-robin wins"
-            print(f"  L={L:>5}: speedup {sp:.2f}×  ({tag})   "
-                  f"cache-hit {rr['cache_hit_frac']:.2f} → {af['cache_hit_frac']:.2f}")
+            print(
+                f"  L={L:>5}: speedup {sp:.2f}×  ({tag})   "
+                f"cache-hit {rr['cache_hit_frac']:.2f} → {af['cache_hit_frac']:.2f}"
+            )
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     out = RESULTS / "vllm_validation.json"
     out.write_text(json.dumps({"args": vars(args), "rows": rows}, indent=2))
     print(f"\n[validate] wrote {out}")
-    print("[validate] sanity checks: affinity should show higher cache-hit and "
-          "~1 distinct worker/prefix; round-robin ~2 and lower cache-hit. If not, "
-          "routing is not concentrating prefixes — investigate before trusting p99.")
+    print(
+        "[validate] sanity checks: affinity should show higher cache-hit and "
+        "~1 distinct worker/prefix; round-robin ~2 and lower cache-hit. If not, "
+        "routing is not concentrating prefixes — investigate before trusting p99."
+    )
 
 
 if __name__ == "__main__":

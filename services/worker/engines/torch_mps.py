@@ -14,7 +14,7 @@ imported lazily by the harness when RELAY_ENGINE=torch-mps.
 from __future__ import annotations
 
 import time
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from relay_core.types import EngineStats, InferItem, ResultItem
 

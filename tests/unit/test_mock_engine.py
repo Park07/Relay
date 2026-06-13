@@ -15,8 +15,8 @@ from services.worker.engines.mock import MockEngine
 
 def test_base_latency_law_jitter_off():
     e = MockEngine(alpha_ms=18.0, beta_ms=7.5, jitter_sigma=0.0)
-    assert math.isclose(e.batch_latency_ms(1), 25.5, rel_tol=1e-9)   # 18 + 7.5
-    assert math.isclose(e.batch_latency_ms(4), 48.0, rel_tol=1e-9)   # 18 + 30
+    assert math.isclose(e.batch_latency_ms(1), 25.5, rel_tol=1e-9)  # 18 + 7.5
+    assert math.isclose(e.batch_latency_ms(4), 48.0, rel_tol=1e-9)  # 18 + 30
     assert math.isclose(e.batch_latency_ms(16), 138.0, rel_tol=1e-9)  # 18 + 120
 
 
@@ -33,7 +33,7 @@ def test_throughput_formula_and_monotonic_increasing():
     assert math.isclose(e.throughput_analytic(1), 1000.0 * 1 / 25.5, rel_tol=1e-9)
     vals = [e.throughput_analytic(b) for b in range(1, 33)]
     # Strictly increasing in b.
-    assert all(b2 > b1 for b1, b2 in zip(vals, vals[1:]))
+    assert all(b2 > b1 for b1, b2 in zip(vals, vals[1:], strict=False))
 
 
 def test_throughput_asymptotes_to_inverse_beta():
@@ -49,7 +49,7 @@ def test_throughput_asymptotes_to_inverse_beta():
 def test_per_item_latency_decreases_with_batch_size():
     e = MockEngine(alpha_ms=18.0, beta_ms=7.5, jitter_sigma=0.0)
     per_item = [e.batch_latency_ms(b) / b for b in range(1, 33)]
-    assert all(p2 < p1 for p1, p2 in zip(per_item, per_item[1:]))
+    assert all(p2 < p1 for p1, p2 in zip(per_item, per_item[1:], strict=False))
 
 
 def test_jitter_off_is_exact_and_repeatable():

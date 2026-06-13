@@ -79,8 +79,22 @@ def _unique_prefix(rng: np.random.Generator, n_chars: int) -> str:
     # A fresh prefix every call so each request pays FULL prefill (llama.cpp
     # caches identical prompt prefixes between calls; a repeated prefix would
     # report a near-zero prompt_eval and under-measure the prefill cost).
-    words = ["alpha", "bravo", "delta", "echo", "gamma", "kilo", "lima", "nova",
-             "sierra", "tango", "umbra", "victor", "yankee", "zephyr"]
+    words = [
+        "alpha",
+        "bravo",
+        "delta",
+        "echo",
+        "gamma",
+        "kilo",
+        "lima",
+        "nova",
+        "sierra",
+        "tango",
+        "umbra",
+        "victor",
+        "yankee",
+        "zephyr",
+    ]
     out: list[str] = []
     total = 0
     while total < n_chars:
@@ -91,12 +105,17 @@ def _unique_prefix(rng: np.random.Generator, n_chars: int) -> str:
 
 
 def _ollama_generate(model: str, prompt: str, num_predict: int) -> dict:
-    body = json.dumps({
-        "model": model, "prompt": prompt, "stream": False,
-        "options": {"num_predict": num_predict, "temperature": 0.0},
-    }).encode()
+    body = json.dumps(
+        {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"num_predict": num_predict, "temperature": 0.0},
+        }
+    ).encode()
     req = urllib.request.Request(
-        OLLAMA_URL, data=body, headers={"Content-Type": "application/json"})
+        OLLAMA_URL, data=body, headers={"Content-Type": "application/json"}
+    )
     with urllib.request.urlopen(req, timeout=300) as resp:
         return json.loads(resp.read().decode())
 
@@ -107,10 +126,10 @@ def measure_ollama(model: str, reps: int) -> dict:
     """
     rng = np.random.default_rng(0)
     prompt_tok: list[int] = []
-    prefill_ms: list[float] = []         # prompt_eval_duration (ms)
-    decode_counts: list[float] = []      # eval_count (tokens generated)
-    decode_ms: list[float] = []          # eval_duration (ms)
-    overhead_ms: list[float] = []        # total - prompt_eval - eval (ms)
+    prefill_ms: list[float] = []  # prompt_eval_duration (ms)
+    decode_counts: list[float] = []  # eval_count (tokens generated)
+    decode_ms: list[float] = []  # eval_duration (ms)
+    overhead_ms: list[float] = []  # total - prompt_eval - eval (ms)
     samples: list[dict] = []
 
     for k in DECODE_TOKEN_GRID:
@@ -130,14 +149,21 @@ def measure_ollama(model: str, reps: int) -> dict:
             decode_counts.append(ev_n)
             decode_ms.append(ev_ms)
             overhead_ms.append(max(0.0, tot_ms - pe_ms - ev_ms))
-            samples.append({"prompt_tokens": pe_n, "prompt_eval_ms": round(pe_ms, 2),
-                            "output_tokens": ev_n, "eval_ms": round(ev_ms, 2),
-                            "total_ms": round(tot_ms, 2)})
+            samples.append(
+                {
+                    "prompt_tokens": pe_n,
+                    "prompt_eval_ms": round(pe_ms, 2),
+                    "output_tokens": ev_n,
+                    "eval_ms": round(ev_ms, 2),
+                    "total_ms": round(tot_ms, 2),
+                }
+            )
 
     if len(decode_counts) < 4:
         raise SystemExit(
             "Ollama returned too few usable samples — is the daemon healthy and "
-            "the model pulled? (Each /api/generate must report prompt_eval/eval.)")
+            "the model pulled? (Each /api/generate must report prompt_eval/eval.)"
+        )
 
     # Decode cost per output token: slope of eval_duration vs tokens generated.
     decode_ms_per_token, decode_intercept, r2 = _linfit(decode_counts, decode_ms)
@@ -147,8 +173,8 @@ def measure_ollama(model: str, reps: int) -> dict:
     mean_prompt_tokens = float(np.mean(prompt_tok))
 
     # --- map measured rates onto the engine's three constants (consistent ms) ---
-    engine_prefill_ms = prefill_ms_per_token * mean_prompt_tokens     # cost a hit saves
-    engine_beta_ms = decode_ms_per_token * NOMINAL_OUTPUT_TOKENS       # one item's decode (serial)
+    engine_prefill_ms = prefill_ms_per_token * mean_prompt_tokens  # cost a hit saves
+    engine_beta_ms = decode_ms_per_token * NOMINAL_OUTPUT_TOKENS  # one item's decode (serial)
     engine_alpha_ms = float(np.mean(overhead_ms)) + max(0.0, decode_intercept)
 
     return {
@@ -180,8 +206,12 @@ def measure_ollama(model: str, reps: int) -> dict:
 # Synthetic path: known ground truth + noise (clearly labelled)
 # --------------------------------------------------------------------------- #
 def measure_synthetic(
-    alpha_true: float = 18.0, beta_true: float = 7.5, prefill_true: float = 160.0,
-    reps: int = 6, sigma: float = 0.10, seed: int = 0,
+    alpha_true: float = 18.0,
+    beta_true: float = 7.5,
+    prefill_true: float = 160.0,
+    reps: int = 6,
+    sigma: float = 0.10,
+    seed: int = 0,
 ) -> dict:
     rng = np.random.default_rng(seed)
     bsizes = (1, 4, 8, 16)
@@ -191,7 +221,7 @@ def measure_synthetic(
     for b in bsizes:
         for _ in range(reps):
             base = alpha_true + beta_true * b
-            noisy = float(base * np.exp(rng.normal(-0.5 * sigma ** 2, sigma)))
+            noisy = float(base * np.exp(rng.normal(-0.5 * sigma**2, sigma)))
             xs.append(b)
             ys.append(noisy)
             samples.append([b, noisy])
@@ -217,15 +247,18 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Calibrate engine latency constants.")
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--ollama", action="store_true", help="measure on a live Ollama daemon")
-    mode.add_argument("--synthetic", action="store_true",
-                      help="synthetic ground truth (default; no deps)")
+    mode.add_argument(
+        "--synthetic", action="store_true", help="synthetic ground truth (default; no deps)"
+    )
     ap.add_argument("--model", default="qwen2.5:0.5b")
     ap.add_argument("--reps", type=int, default=5)
     args = ap.parse_args()
 
     if args.ollama and not args.synthetic:
-        print(f"Calibrating on Ollama model={args.model} (single-slot; "
-              f"measuring real prefill + decode) ...")
+        print(
+            f"Calibrating on Ollama model={args.model} (single-slot; "
+            f"measuring real prefill + decode) ..."
+        )
         out = measure_ollama(args.model, args.reps)
     else:
         print("Calibrating against SYNTHETIC ground truth (no hardware).")
@@ -233,13 +266,17 @@ def main() -> None:
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     CALIB_PATH.write_text(json.dumps(out, indent=2))
-    print(f"  alpha_ms={out['alpha_ms']:.2f}  beta_ms={out['beta_ms']:.2f}  "
-          f"prefill_ms={out['prefill_ms']:.2f}  R²={out['r2']:.4f}  "
-          f"(source={out['source']})")
+    print(
+        f"  alpha_ms={out['alpha_ms']:.2f}  beta_ms={out['beta_ms']:.2f}  "
+        f"prefill_ms={out['prefill_ms']:.2f}  R²={out['r2']:.4f}  "
+        f"(source={out['source']})"
+    )
     if out.get("measured"):
-        print(f"  [measured] decode={out['decode_ms_per_token']:.2f} ms/tok, "
-              f"prefill={out['prefill_ms_per_token']:.2f} ms/tok over "
-              f"~{out['mean_prompt_tokens']:.0f} prompt tokens")
+        print(
+            f"  [measured] decode={out['decode_ms_per_token']:.2f} ms/tok, "
+            f"prefill={out['prefill_ms_per_token']:.2f} ms/tok over "
+            f"~{out['mean_prompt_tokens']:.0f} prompt tokens"
+        )
     print(f"  wrote {CALIB_PATH}")
 
 

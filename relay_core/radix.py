@@ -32,8 +32,8 @@ from __future__ import annotations
 
 import itertools
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Iterable, Optional
 
 
 @dataclass
@@ -42,7 +42,7 @@ class _Node:
     # owned by this worker pass through this node (so eviction of one path doesn't
     # drop a worker still reachable here via a longer path).
     owners: dict[str, list[int]] = field(default_factory=dict)
-    children: dict[str, "_Node"] = field(default_factory=dict)
+    children: dict[str, _Node] = field(default_factory=dict)
 
 
 class RadixPrefixTree:
@@ -58,7 +58,7 @@ class RadixPrefixTree:
         self.capacity = capacity
         self._seq = itertools.count()
         # worker_id -> OrderedDict[path_tuple -> None], LRU order (oldest first)
-        self._paths: dict[str, "OrderedDict[tuple[str, ...], None]"] = {}
+        self._paths: dict[str, OrderedDict[tuple[str, ...], None]] = {}
 
     # -- insert ------------------------------------------------------------ #
     def insert(self, blocks: tuple[str, ...], worker_id: str) -> None:
@@ -120,16 +120,17 @@ class RadixPrefixTree:
 
     # -- query ------------------------------------------------------------- #
     def match_longest(
-        self, blocks: tuple[str, ...],
-        is_eligible: Optional[Callable[[str], bool]] = None,
-    ) -> tuple[Optional[str], int]:
+        self,
+        blocks: tuple[str, ...],
+        is_eligible: Callable[[str], bool] | None = None,
+    ) -> tuple[str | None, int]:
         """Return ``(worker_id, matched_blocks)`` for the eligible worker sharing
         the deepest block prefix with ``blocks``. ``matched_blocks`` is how many
         leading blocks that worker already caches (0 ⇒ no eligible match → caller
         should fall back to the ring). Ties at equal depth break to the
         most-recently-used owner (warmest cache)."""
         node = self.root
-        best_wid: Optional[str] = None
+        best_wid: str | None = None
         best_depth = 0
         for depth, b in enumerate(blocks, start=1):
             child = node.children.get(b)

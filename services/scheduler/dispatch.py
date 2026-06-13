@@ -26,7 +26,7 @@ from relay_core.types import BatchAssignment, WorkerState
 @dataclass
 class WorkerChannel:
     state: WorkerState
-    outbox: "asyncio.Queue[BatchAssignment]" = field(default_factory=asyncio.Queue)
+    outbox: asyncio.Queue[BatchAssignment] = field(default_factory=asyncio.Queue)
 
 
 class LeaseManager:

@@ -11,8 +11,6 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
-
 from bench.workload import WorkloadParams, ZipfianPrefixWorkload
 from relay_core.types import Priority
 
@@ -32,7 +30,7 @@ def test_topk_mass_increases_with_skew():
 def test_theoretical_topk_mass_is_monotone_in_k():
     w = ZipfianPrefixWorkload(WorkloadParams(pool_size=200, skew=1.1, seed=1))
     masses = [w.theoretical_topk_mass(k) for k in range(1, 50)]
-    assert all(m2 >= m1 for m1, m2 in zip(masses, masses[1:]))
+    assert all(m2 >= m1 for m1, m2 in zip(masses, masses[1:], strict=False))
     assert masses[-1] <= 1.0 + 1e-12
 
 
@@ -112,6 +110,9 @@ def test_as_dict_roundtrips_params():
     p = WorkloadParams(pool_size=123, skew=1.3, prefix_chars=512, suffix_chars=32, seed=17)
     d = p.as_dict()
     assert d == {
-        "pool_size": 123, "skew": 1.3, "prefix_chars": 512,
-        "suffix_chars": 32, "seed": 17,
+        "pool_size": 123,
+        "skew": 1.3,
+        "prefix_chars": 512,
+        "suffix_chars": 32,
+        "seed": 17,
     }

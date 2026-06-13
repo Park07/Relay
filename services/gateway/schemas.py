@@ -7,8 +7,7 @@ transport-agnostic dataclasses in relay_core.types: the wire schema can evolve
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
 try:
     from pydantic import BaseModel, Field
@@ -24,12 +23,12 @@ except Exception:  # pragma: no cover - allows import without pydantic installed
         return default
 
 
-class Mode(str, Enum):
+class Mode(StrEnum):
     sync = "sync"
     async_ = "async"
 
 
-class PriorityIn(str, Enum):
+class PriorityIn(StrEnum):
     high = "high"
     default = "default"
 
@@ -52,7 +51,7 @@ class InferRequest(BaseModel):
 class InferSyncResponse(BaseModel):
     job_id: str
     model: str
-    output: Optional[str] = None
+    output: str | None = None
     cache_hit: bool = False
     queue_wait_ms: float = 0.0
     inference_ms: float = 0.0
@@ -67,13 +66,13 @@ class InferAcceptedResponse(BaseModel):
 class JobStatus(BaseModel):
     job_id: str
     status: str  # queued|running|done|error
-    model: Optional[str] = None
-    output: Optional[str] = None
-    error: Optional[str] = None
-    cache_hit: Optional[bool] = None
-    queue_wait_ms: Optional[float] = None
-    inference_ms: Optional[float] = None
-    total_ms: Optional[float] = None
+    model: str | None = None
+    output: str | None = None
+    error: str | None = None
+    cache_hit: bool | None = None
+    queue_wait_ms: float | None = None
+    inference_ms: float | None = None
+    total_ms: float | None = None
 
 
 class ModelInfo(BaseModel):

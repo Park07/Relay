@@ -38,30 +38,31 @@ from collections import OrderedDict
 import numpy as np
 
 from relay_core.types import WorkerState
-from services.scheduler.router import PURE_AFFINITY, PrefixRouter
 from services.scheduler.radix_router import RadixPrefixRouter
+from services.scheduler.router import PrefixRouter
 
 MODEL = "m"
-PREFILL_MS_PER_BLOCK = 40.0   # cost to build one block's KV on a miss
+PREFILL_MS_PER_BLOCK = 40.0  # cost to build one block's KV on a miss
 ALPHA_MS = 18.0
-BETA_MS = 7.5                  # decode, per item in batch (single-item here)
+BETA_MS = 7.5  # decode, per item in batch (single-item here)
 
 
 def _h(s: str) -> str:
     return hashlib.blake2b(s.encode(), digest_size=8).hexdigest()
 
 
-def branching_workload(n: int, n_branches: int, depth: int, leaf_fanout: int,
-                       seed: int) -> list[tuple[str, ...]]:
+def branching_workload(
+    n: int, n_branches: int, depth: int, leaf_fanout: int, seed: int
+) -> list[tuple[str, ...]]:
     """Block sequences with ONE shared root block (block 0), branching into
     `n_branches` sub-stems, each extended to `depth` shared blocks, then a
     per-request divergent tail. So *all* traffic shares block 0; subsets share
     progressively deeper stems — the regime single-first-block-hash mishandles."""
     rng = np.random.default_rng(seed)
-    root = _h("system-prompt-v1")               # shared by EVERY request
+    root = _h("system-prompt-v1")  # shared by EVERY request
     # Zipfian popularity over branches (some stems much hotter than others).
     ranks = np.arange(1, n_branches + 1, dtype=np.float64)
-    pmf = 1.0 / ranks ** 1.1
+    pmf = 1.0 / ranks**1.1
     pmf /= pmf.sum()
     seqs: list[tuple[str, ...]] = []
     for i in range(n):
@@ -80,7 +81,7 @@ class BlockCache:
 
     def __init__(self, capacity_blocks: int):
         self.cap = capacity_blocks
-        self.lru: "OrderedDict[str, None]" = OrderedDict()
+        self.lru: OrderedDict[str, None] = OrderedDict()
 
     def reused_and_warm(self, blocks: tuple[str, ...]) -> int:
         reused = 0
@@ -91,7 +92,7 @@ class BlockCache:
                 self.lru.move_to_end(b)
             else:
                 break
-        for b in blocks:                          # warm all blocks
+        for b in blocks:  # warm all blocks
             if b in self.lru:
                 self.lru.move_to_end(b)
             else:
@@ -101,25 +102,37 @@ class BlockCache:
         return reused
 
 
-def run(policy: str, seqs, n_workers, cap_factor, offered_rps, cache_blocks,
-        max_concurrent: int = 4):
-    workers = [WorkerState(worker_id=f"w{i}", engine="mock", models=(MODEL,),
-                           max_concurrent_batches=max_concurrent)
-               for i in range(n_workers)]
+def run(
+    policy: str, seqs, n_workers, cap_factor, offered_rps, cache_blocks, max_concurrent: int = 4
+):
+    workers = [
+        WorkerState(
+            worker_id=f"w{i}", engine="mock", models=(MODEL,), max_concurrent_batches=max_concurrent
+        )
+        for i in range(n_workers)
+    ]
     # Live load the cap reacts to = in-service + queued (mirrors simulate.py's
     # _load), so a worker with a deep queue is seen as loaded and spilled off.
-    busy = {w.worker_id: 0 for w in workers}              # slots in service
-    queued = {w.worker_id: 0 for w in workers}            # waiting in FIFO
-    load_fn = lambda w: float(busy[w.worker_id] + queued[w.worker_id])
+    busy = {w.worker_id: 0 for w in workers}  # slots in service
+    queued = {w.worker_id: 0 for w in workers}  # waiting in FIFO
+
+    def load_fn(w):
+        return float(busy[w.worker_id] + queued[w.worker_id])
 
     if policy == "single_hash":
-        router = PrefixRouter(workers, load_cap_factor=cap_factor,
-                              load_fn=load_fn, admit_fn=lambda w: True)
-        pick = lambda blocks: router.pick(MODEL, blocks[0])      # first block only
+        router = PrefixRouter(
+            workers, load_cap_factor=cap_factor, load_fn=load_fn, admit_fn=lambda w: True
+        )
+
+        def pick(blocks):
+            return router.pick(MODEL, blocks[0])  # first block only
     elif policy == "radix":
-        router = RadixPrefixRouter(workers, load_cap_factor=cap_factor,
-                                   load_fn=load_fn, admit_fn=lambda w: True)
-        pick = lambda blocks: router.pick(MODEL, blocks)
+        router = RadixPrefixRouter(
+            workers, load_cap_factor=cap_factor, load_fn=load_fn, admit_fn=lambda w: True
+        )
+
+        def pick(blocks):
+            return router.pick(MODEL, blocks)
     else:
         raise ValueError(policy)
 
@@ -135,7 +148,7 @@ def run(policy: str, seqs, n_workers, cap_factor, offered_rps, cache_blocks,
         heapq.heappush(heap, (float(t), next(seq), "arr", i))
 
     clock = 0.0
-    latency_ms: list[float] = []      # END-TO-END: queue wait + service
+    latency_ms: list[float] = []  # END-TO-END: queue wait + service
     reuse_frac: list[float] = []
     assign_count = {w.worker_id: 0 for w in workers}
     stem_workers: dict[tuple, set] = {}
@@ -147,7 +160,7 @@ def run(policy: str, seqs, n_workers, cap_factor, offered_rps, cache_blocks,
         svc = ALPHA_MS + BETA_MS + PREFILL_MS_PER_BLOCK * missed
         busy[wid] += 1
         reuse_frac.append(reused / len(blocks))
-        latency_ms.append((clock - arrival_ts) + svc)     # wait + service
+        latency_ms.append((clock - arrival_ts) + svc)  # wait + service
         heapq.heappush(heap, (clock + svc, next(seq), "done", wid))
 
     while heap:
@@ -157,18 +170,18 @@ def run(policy: str, seqs, n_workers, cap_factor, offered_rps, cache_blocks,
             i = payload
             blocks = seqs[i]
             w = pick(blocks)
-            if w is None:                          # all capped → retry shortly
+            if w is None:  # all capped → retry shortly
                 heapq.heappush(heap, (clock + 1.0, next(seq), "arr", i))
                 continue
             wid = w.worker_id
             assign_count[wid] += 1
             stem_workers.setdefault(blocks[:3], set()).add(wid)
-            if busy[wid] < max_concurrent:         # free slot → serve now
+            if busy[wid] < max_concurrent:  # free slot → serve now
                 _start(wid, clock, blocks)
-            else:                                  # busy → wait in this worker's queue
+            else:  # busy → wait in this worker's queue
                 fifo[wid].append((clock, blocks))
                 queued[wid] += 1
-        else:                                      # done: free slot, pull next queued
+        else:  # done: free slot, pull next queued
             wid = payload
             busy[wid] -= 1
             if fifo[wid]:
@@ -202,45 +215,72 @@ def main() -> None:
     ap.add_argument("--cache-blocks", type=int, default=64)
     args = ap.parse_args()
 
-    seqs = branching_workload(args.n_requests, args.branches, args.depth,
-                              args.leaf_fanout, seed=1)
+    seqs = branching_workload(args.n_requests, args.branches, args.depth, args.leaf_fanout, seed=1)
     avg_blocks = float(np.mean([len(s) for s in seqs]))
-    print(f"[radix] branching workload: {args.n_requests} reqs, {args.branches} "
-          f"branches × depth {args.depth}, ~{avg_blocks:.0f} blocks/req, ALL sharing "
-          f"block 0 (a common system prompt).\n        {args.n_workers} workers × "
-          f"{args.max_concurrent} concurrent, cap={args.cap_factor}.\n")
+    print(
+        f"[radix] branching workload: {args.n_requests} reqs, {args.branches} "
+        f"branches × depth {args.depth}, ~{avg_blocks:.0f} blocks/req, ALL sharing "
+        f"block 0 (a common system prompt).\n        {args.n_workers} workers × "
+        f"{args.max_concurrent} concurrent, cap={args.cap_factor}.\n"
+    )
 
     # Routing quality is load-independent — report it once at light load.
-    base = {p: run(p, seqs, args.n_workers, args.cap_factor, 40.0,
-                   args.cache_blocks, args.max_concurrent)
-            for p in ("single_hash", "radix")}
+    base = {
+        p: run(
+            p, seqs, args.n_workers, args.cap_factor, 40.0, args.cache_blocks, args.max_concurrent
+        )
+        for p in ("single_hash", "radix")
+    }
     sh0, rx0 = base["single_hash"], base["radix"]
     print("  routing quality (light load):")
-    print(f"    single_hash  block-reuse={sh0['reuse_frac']:.3f}  "
-          f"imbalance={sh0['imbalance']:.2f}  distinct_workers/stem={sh0['distinct_workers_per_stem']:.2f}")
-    print(f"    radix        block-reuse={rx0['reuse_frac']:.3f}  "
-          f"imbalance={rx0['imbalance']:.2f}  distinct_workers/stem={rx0['distinct_workers_per_stem']:.2f}")
-    print(f"    → radix reuses +{100*(rx0['reuse_frac']-sh0['reuse_frac']):.0f}% more "
-          f"cache and balances {sh0['imbalance']/rx0['imbalance']:.1f}× better.\n")
+    print(
+        f"    single_hash  block-reuse={sh0['reuse_frac']:.3f}  "
+        f"imbalance={sh0['imbalance']:.2f}  "
+        f"distinct_workers/stem={sh0['distinct_workers_per_stem']:.2f}"
+    )
+    print(
+        f"    radix        block-reuse={rx0['reuse_frac']:.3f}  "
+        f"imbalance={rx0['imbalance']:.2f}  "
+        f"distinct_workers/stem={rx0['distinct_workers_per_stem']:.2f}"
+    )
+    print(
+        f"    → radix reuses +{100 * (rx0['reuse_frac'] - sh0['reuse_frac']):.0f}% more "
+        f"cache and balances {sh0['imbalance'] / rx0['imbalance']:.1f}× better.\n"
+    )
 
     # The finding: as offered load rises, single-hash's imbalance saturates its
     # hottest worker first → p99 diverges. Sweep to find where.
     print("  p99 latency (ms) vs offered load — where does imbalance bite?")
     print(f"    {'rps':>6}  {'single_hash':>12}  {'radix':>10}   ratio")
     for rps in (40, 70, 100, 130, 160, 200):
-        sh = run("single_hash", seqs, args.n_workers, args.cap_factor, rps,
-                 args.cache_blocks, args.max_concurrent)
-        rx = run("radix", seqs, args.n_workers, args.cap_factor, rps,
-                 args.cache_blocks, args.max_concurrent)
+        sh = run(
+            "single_hash",
+            seqs,
+            args.n_workers,
+            args.cap_factor,
+            rps,
+            args.cache_blocks,
+            args.max_concurrent,
+        )
+        rx = run(
+            "radix",
+            seqs,
+            args.n_workers,
+            args.cap_factor,
+            rps,
+            args.cache_blocks,
+            args.max_concurrent,
+        )
         ratio = sh["p99_ms"] / rx["p99_ms"] if rx["p99_ms"] else 0.0
         flag = "  ← single-hash hot worker saturating" if ratio >= 1.5 else ""
-        print(f"    {rps:>6}  {sh['p99_ms']:>12.0f}  {rx['p99_ms']:>10.0f}   "
-              f"{ratio:>4.1f}×{flag}")
-    print("\n  Read: longest-prefix routing distributes the shared-stem traffic by "
-          "deeper\n  prefix, so no single worker is pinned — it sustains higher load "
-          "before p99\n  degrades, while also reusing more cache. (Service-time cost "
-          "model; latency is\n  queue-wait + block-prefill. The crossover in *load*, "
-          "not prefix length, is the\n  point here.)")
+        print(f"    {rps:>6}  {sh['p99_ms']:>12.0f}  {rx['p99_ms']:>10.0f}   {ratio:>4.1f}×{flag}")
+    print(
+        "\n  Read: longest-prefix routing distributes the shared-stem traffic by "
+        "deeper\n  prefix, so no single worker is pinned — it sustains higher load "
+        "before p99\n  degrades, while also reusing more cache. (Service-time cost "
+        "model; latency is\n  queue-wait + block-prefill. The crossover in *load*, "
+        "not prefix length, is the\n  point here.)"
+    )
 
 
 if __name__ == "__main__":
