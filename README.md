@@ -3,6 +3,7 @@
 ## Why this exist in the first place:
 It came out of a known problem in multi-GPU LLM serving: when prompts share long prefixes, every worker re-computes the same prefill, which is wasteful. The industry fix is cache-aware routing — send same-prefix requests to the same worker — and it's in vLLM, SGLang, Ray Serve. But it fights load balancing, so I wanted to measure when the cache reuse is worth the imbalance. I implemented it with bounded-load consistent hashing, measured a ~530-token crossover, and validated the routing on real vLLM. The contribution is the measurement and the honesty about what's simulated vs real — not a new algorithm
 
+## How it works:
 A GPU inference-serving **control plane**: queue → schedule → batch → place → observe → autoscale. The lead feature is **prefix / KV-cache-aware routing under bounded load** — steering same-prefix requests to the worker that already holds their KV cache, balanced by **bounded-load consistent hashing** so a hot prefix can't pin one worker. One knob, `load_cap_factor`, sweeps the whole policy space from pure cache affinity to round-robin.
 
 Design rationale, ADRs, and the decision records are in [`DESIGN.md`](DESIGN.md).
