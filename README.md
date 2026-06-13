@@ -94,18 +94,35 @@ Heavy imports (FastAPI, redis, asyncpg, grpc, torch) are deferred behind gracefu
 
 ## Architecture
 
-```
-            ┌─────────┐   REST/SSE    ┌───────────┐   gRPC bidi    ┌──────────┐
-  client ──▶│ Gateway │──────────────▶│ Scheduler │◀──────lease────│ Worker×N │
-            │ (auth,  │   enqueue     │ (admit,   │   dispatch ───▶│ (engine) │
-            │  limit) │               │  batch,   │   results ◀────│          │
-            └────┬────┘               │  route)   │                └────┬─────┘
-                 │                    └─────┬─────┘                     │
-              Redis  ◀── queues / jobs / rate / idem ──▶  Postgres (analytics)
-                 │                          │                          │
-                 └──────────── Prometheus  /metrics  ──────────────────┘
-                                      │
-                                  Grafana   +   HPA (autoscales workers on relay_queue_depth)
+```mermaid
+flowchart LR
+    client([Client])
+
+    subgraph cp["Control plane"]
+        gw["Gateway<br/>auth · rate-limit · idempotency"]
+        sch["Scheduler<br/>admit · batch · route"]
+    end
+
+    workers["Worker × N<br/>engine"]
+    redis[("Redis<br/>queues · jobs · rate · idem")]
+    pg[("Postgres<br/>durable state / analytics")]
+    prom["Prometheus<br/>/metrics"]
+    graf(["Grafana"])
+    hpa["HPA<br/>scale on relay_queue_depth"]
+
+    client -->|"REST / SSE"| gw
+    gw -->|enqueue| sch
+    sch <-->|"gRPC bidi — lease / dispatch / results"| workers
+    gw --- redis
+    sch --- redis
+    gw -.-> pg
+    sch -.-> pg
+    gw --> prom
+    sch --> prom
+    workers --> prom
+    prom --> graf
+    prom --> hpa
+    hpa -. scales .-> workers
 ```
 
 - **Routing depth**: `services/scheduler/router.py` + `relay_core/hashing.py`.
