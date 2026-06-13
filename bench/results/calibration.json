@@ -1,157 +1,93 @@
 {
-  "alpha_ms": 1834.857,
-  "beta_ms": 1947.772,
-  "prefill_ms": 634.268,
-  "r2": 0.3544,
-  "source": "ollama:qwen2.5:0.5b",
-  "measured": true,
-  "decode_ms_per_token": 30.4339,
-  "prefill_ms_per_token": 1.316,
-  "mean_prompt_tokens": 481.9,
-  "nominal_output_tokens": 64,
+  "alpha_ms": 17.079,
+  "beta_ms": 7.393,
+  "prefill_ms": 160.0,
+  "r2": 0.9755,
+  "source": "synthetic",
+  "measured": false,
   "n_samples": 20,
   "samples": [
-    {
-      "prompt_tokens": 485.0,
-      "prompt_eval_ms": 747.89,
-      "output_tokens": 16.0,
-      "eval_ms": 469.69,
-      "total_ms": 8266.75
-    },
-    {
-      "prompt_tokens": 487.0,
-      "prompt_eval_ms": 803.1,
-      "output_tokens": 16.0,
-      "eval_ms": 448.16,
-      "total_ms": 2147.33
-    },
-    {
-      "prompt_tokens": 480.0,
-      "prompt_eval_ms": 1172.95,
-      "output_tokens": 16.0,
-      "eval_ms": 609.02,
-      "total_ms": 2475.21
-    },
-    {
-      "prompt_tokens": 475.0,
-      "prompt_eval_ms": 643.94,
-      "output_tokens": 16.0,
-      "eval_ms": 475.5,
-      "total_ms": 1994.76
-    },
-    {
-      "prompt_tokens": 480.0,
-      "prompt_eval_ms": 672.45,
-      "output_tokens": 16.0,
-      "eval_ms": 555.34,
-      "total_ms": 2343.87
-    },
-    {
-      "prompt_tokens": 479.0,
-      "prompt_eval_ms": 984.23,
-      "output_tokens": 32.0,
-      "eval_ms": 1465.68,
-      "total_ms": 4231.27
-    },
-    {
-      "prompt_tokens": 479.0,
-      "prompt_eval_ms": 478.78,
-      "output_tokens": 32.0,
-      "eval_ms": 729.83,
-      "total_ms": 1814.82
-    },
-    {
-      "prompt_tokens": 493.0,
-      "prompt_eval_ms": 528.53,
-      "output_tokens": 32.0,
-      "eval_ms": 1318.05,
-      "total_ms": 2197.27
-    },
-    {
-      "prompt_tokens": 493.0,
-      "prompt_eval_ms": 638.91,
-      "output_tokens": 32.0,
-      "eval_ms": 1268.43,
-      "total_ms": 4822.01
-    },
-    {
-      "prompt_tokens": 484.0,
-      "prompt_eval_ms": 849.91,
-      "output_tokens": 32.0,
-      "eval_ms": 5123.38,
-      "total_ms": 7132.24
-    },
-    {
-      "prompt_tokens": 481.0,
-      "prompt_eval_ms": 586.02,
-      "output_tokens": 64.0,
-      "eval_ms": 1912.5,
-      "total_ms": 3681.2
-    },
-    {
-      "prompt_tokens": 478.0,
-      "prompt_eval_ms": 469.53,
-      "output_tokens": 64.0,
-      "eval_ms": 7175.32,
-      "total_ms": 8318.7
-    },
-    {
-      "prompt_tokens": 482.0,
-      "prompt_eval_ms": 580.23,
-      "output_tokens": 64.0,
-      "eval_ms": 2059.9,
-      "total_ms": 3474.94
-    },
-    {
-      "prompt_tokens": 481.0,
-      "prompt_eval_ms": 515.78,
-      "output_tokens": 64.0,
-      "eval_ms": 1925.0,
-      "total_ms": 3074.5
-    },
-    {
-      "prompt_tokens": 477.0,
-      "prompt_eval_ms": 474.62,
-      "output_tokens": 45.0,
-      "eval_ms": 1165.23,
-      "total_ms": 2269.64
-    },
-    {
-      "prompt_tokens": 478.0,
-      "prompt_eval_ms": 501.88,
-      "output_tokens": 99.0,
-      "eval_ms": 3807.07,
-      "total_ms": 4875.49
-    },
-    {
-      "prompt_tokens": 475.0,
-      "prompt_eval_ms": 519.77,
-      "output_tokens": 128.0,
-      "eval_ms": 3703.02,
-      "total_ms": 5146.04
-    },
-    {
-      "prompt_tokens": 479.0,
-      "prompt_eval_ms": 499.6,
-      "output_tokens": 106.0,
-      "eval_ms": 3043.51,
-      "total_ms": 4259.82
-    },
-    {
-      "prompt_tokens": 487.0,
-      "prompt_eval_ms": 505.15,
-      "output_tokens": 92.0,
-      "eval_ms": 3875.81,
-      "total_ms": 5104.14
-    },
-    {
-      "prompt_tokens": 486.0,
-      "prompt_eval_ms": 512.73,
-      "output_tokens": 99.0,
-      "eval_ms": 2993.91,
-      "total_ms": 4165.28
-    }
+    [
+      1,
+      25.693845134103285
+    ],
+    [
+      1,
+      25.039835227410084
+    ],
+    [
+      1,
+      27.050911922704945
+    ],
+    [
+      1,
+      25.64038029086999
+    ],
+    [
+      1,
+      24.049435271661224
+    ],
+    [
+      4,
+      49.51920214130169
+    ],
+    [
+      4,
+      54.41288679494294
+    ],
+    [
+      4,
+      52.5050369668334
+    ],
+    [
+      4,
+      44.51505681460007
+    ],
+    [
+      4,
+      42.08363146601792
+    ],
+    [
+      8,
+      72.92134397358885
+    ],
+    [
+      8,
+      77.93237197349363
+    ],
+    [
+      8,
+      61.51036820029611
+    ],
+    [
+      8,
+      75.93135134364076
+    ],
+    [
+      8,
+      68.51945585115392
+    ],
+    [
+      16,
+      127.61615247409793
+    ],
+    [
+      16,
+      130.03813932761923
+    ],
+    [
+      16,
+      133.03651900546345
+    ],
+    [
+      16,
+      143.08183492746176
+    ],
+    [
+      16,
+      152.3994481375756
+    ]
   ],
-  "fitted_at": "2026-06-10T16:42:58Z",
-  "note": "Measured on a single-slot Ollama daemon (no real multi-sequence batching). prefill_ms and decode rate are real M2 measurements from llama.cpp timing fields; beta_ms is the SERIAL per-item decode cost at 64 output tokens. The batching speedup (beta shrinking as batch size grows) is NOT observable here and is the vLLM/multi-GPU validation step."
+  "fitted_at": "2026-06-13T05:16:13Z",
+  "note": "Synthetic ground truth (no hardware). Sets a realistic prefill:decode RATIO so the frontier SHAPE is right; absolute ms are illustrative."
 }
