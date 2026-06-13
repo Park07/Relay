@@ -138,7 +138,7 @@ The suite pins the properties the result depends on: the ring's minimal-disrupti
 
 ## Limitations
 
-1. **The routing benefit is simulated.** Latency is calibrated to real M2 rates, but multi-worker routing hasn't run against a real engine with separately-evicting caches (one machine = one cache = nothing to route between). The optional vLLM run closes this.
+1. **The crossover is simulated; the routing is validated on real hardware.** The crossover/frontier numbers come from a virtual-time model (real M2 per-token rates, simulated routing). The routing layer itself has now been run against **two real vLLM workers with separate KV caches on 2× A40** ([`bench/results/VLLM_VALIDATION.md`](bench/results/VLLM_VALIDATION.md)): Relay's own `PrefixRouter` holds placement (1.00 vs 1.45–1.57 distinct workers/prefix), drives cache-hit 0.74→0.96 (vLLM's own `cached_tokens`), and its p99 advantage grows with prefix length (1.13×→1.24×) — the simulated crossover's *direction*, confirmed. What remains future work is **scale** (2 workers / 0.5B model here, not a throughput study) and the long-prefix tail (the 4096-token point hit a context/timeout limit).
 2. **Cache eviction is modeled** (LRU at fixed capacity), not validated against a real engine under memory pressure — the long-prefix end of the crossover is most exposed to this.
 3. **The batching model is linear** (`alpha + beta·b`); real continuous batching bends the curve and chunks prefill.
 4. **Single-prefix-hash affinity, not longest-prefix (radix) matching**, and prefixes are hashed on character blocks while real engines cache token blocks.
