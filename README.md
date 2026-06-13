@@ -1,4 +1,4 @@
-# Relay
+# Relay: GPU inference-serving control plane
 
 ## Why this exist in the first place:
 It came out of a known problem in multi-GPU LLM serving: when prompts share long prefixes, every worker re-computes the same prefill, which is wasteful. The industry fix is cache-aware routing — send same-prefix requests to the same worker — and it's in vLLM, SGLang, Ray Serve. But it fights load balancing, so I wanted to measure when the cache reuse is worth the imbalance. I implemented it with bounded-load consistent hashing, measured a ~530-token crossover, and validated the routing on real vLLM. The contribution is the measurement and the honesty about what's simulated vs real — not a new algorithm
