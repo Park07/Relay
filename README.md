@@ -95,45 +95,7 @@ Heavy imports (FastAPI, redis, asyncpg, grpc, torch) are deferred behind gracefu
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    client([Client])
-
-    subgraph cp["Control plane"]
-        gw["Gateway<br/>auth · rate-limit · idempotency"]
-        sch["Scheduler<br/>admit · batch · route by prefix"]
-    end
-
-    subgraph pool["Workers · each holds a private KV cache"]
-        direction TB
-        w0["Worker 0<br/>KV cache"]
-        w1["Worker 1<br/>KV cache"]
-        wN["Worker N<br/>KV cache"]
-    end
-
-    redis[("Redis<br/>queues · jobs · rate · idem")]
-    pg[("Postgres<br/>durable state · analytics")]
-    prom["Prometheus<br/>/metrics"]
-    graf(["Grafana"])
-    hpa["HPA"]
-
-    client -->|"REST / SSE"| gw
-    gw -->|enqueue| sch
-    sch ==>|"route: prefix → worker"| pool
-    pool -.->|"lease (pull) + results"| sch
-
-    gw --- redis
-    sch --- redis
-    gw -.-> pg
-    sch -.-> pg
-
-    gw -.-> prom
-    sch -.-> prom
-    pool -.-> prom
-    prom -.-> graf
-    prom --> hpa
-    hpa ==>|"relay_queue_depth → scale"| pool
-```
+[![Relay architecture](assets/relay_architecture@2x.png)](assets/relay_architecture@2x.png)
 
 <sub>Edges: **solid** = synchronous request hot path · **dotted** = async persistence & metrics · **thick** = autoscaling control loop. Workers *pull* leased work (backpressure), and the scheduler routes each prefix to its home worker so that worker's KV cache is reused.</sub>
 
