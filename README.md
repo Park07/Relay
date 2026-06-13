@@ -70,14 +70,15 @@ Across the sweep, cache-hit climbs **69% → 95%** and p99 drops **~3×** (1292 
 
 Three honesty tiers:
 
-**Runs now, locally, free (no GPU, no services):** the entire algorithmic core — consistent-hash ring, prefix router, deadline batch former, cache-aware + plain mock engines, Zipfian workload, calibration, and the sweeps that produce both results above — plus the full unit suite (75 tests).
+**Runs now, locally, free (no GPU, no services):** the entire algorithmic core — consistent-hash ring, prefix router, radix prefix tree + longest-prefix router, deadline batch former, cache-aware + plain mock engines, Zipfian workload, calibration, and the sweeps that produce the results above — plus the full unit suite (96 tests).
 
 ```bash
 make install        # core + bench deps (numpy, matplotlib, pandas)
-make test           # 75 unit tests, ~1s
+make test           # 96 unit tests, ~1s
 make bench          # Pareto sweep        → bench/results/{frontier.csv,png,RESULTS.md}
 make calibrate      # fit latency constants (add --ollama for real hardware)
-PYTHONPATH=. python bench/crossover.py    # seed-replicated crossover → crossover.{csv,png}, CROSSOVER.md
+PYTHONPATH=. python bench/crossover.py        # seed-replicated crossover → crossover.{csv,png}, CROSSOVER.md
+PYTHONPATH=. python bench/radix_compare.py    # longest-prefix vs single-hash routing → RADIX.md
 ```
 
 **Written faithfully, needs external services (Redis, Postgres, gRPC):** gateway (FastAPI: `/v1/infer`, `/v1/jobs/{id}`, SSE stream, `/v1/models`, `/healthz`, `/readyz`, `/metrics`; Bearer auth; atomic Redis-Lua token-bucket; idempotency keys); scheduler (gRPC server, admission/backpressure, Redis-Streams queue with `XAUTOCLAIM` recovery, dispatch over worker lease streams); worker harness (pull-based gRPC leasing → backpressure) and the Ollama / Torch-MPS engines.
@@ -90,7 +91,7 @@ make proto          # generate gRPC stubs (buf) into services/_gen before runnin
 
 Heavy imports (FastAPI, redis, asyncpg, grpc, torch) are deferred behind graceful fallbacks, so every module imports without those packages — that is why `make test` runs anywhere.
 
-**CUDA-only validation step (rented multi-GPU box, optional):** `VLLMEngine` would confirm the routing win on a *real* KV cache and produce real tokens/s. Same `Engine` interface, so only the worker image changes. Kept optional and conditional — it raises confidence in the simulator's eviction/batching assumptions; it does not produce the result. The cost/benefit is recorded in [`DESIGN.md`](DESIGN.md).
+**Real-GPU validation (rented 2× A40, done):** Relay's own router was run against **two real vLLM workers with separate KV caches**, reading vLLM's `cached_tokens` as ground truth. It confirms the *mechanism* — placement holds (1.00 vs 1.45–1.57 distinct workers/prefix), cache-hit climbs 0.74→0.96, and the p99 advantage grows with prefix length (1.13×→1.24×). Same `Engine` interface, so only the worker image changes. Full result + honest scope (what it does and doesn't confirm) in [`bench/results/VLLM_VALIDATION.md`](bench/results/VLLM_VALIDATION.md).
 
 ## Architecture
 
@@ -136,7 +137,7 @@ flowchart LR
 
 <sub>Edges: **solid** = synchronous request hot path · **dotted** = async persistence & metrics · **thick** = autoscaling control loop. Workers *pull* leased work (backpressure), and the scheduler routes each prefix to its home worker so that worker's KV cache is reused.</sub>
 
-- **Routing depth**: `services/scheduler/router.py` + `relay_core/hashing.py`.
+- **Routing depth**: `services/scheduler/router.py` + `relay_core/hashing.py` (single-hash) and `relay_core/radix.py` + `services/scheduler/radix_router.py` (longest-prefix).
 - **Batching**: `services/scheduler/batch_former.py` (priority = a tighter latency budget; no-starvation dispatch trigger).
 - **Autoscaling** on the custom `relay_queue_depth` metric (not CPU) via prometheus-adapter.
 - **Metrics** named once in `relay_core/metrics.py`, instrumented from the start.
@@ -144,36 +145,36 @@ flowchart LR
 ## Repo map
 
 ```
-relay_core/         types, hashing ring, queue, metrics  (shared, transport-agnostic core)
+relay_core/         types, hashing ring, radix tree, queue, metrics  (shared, transport-agnostic core)
 services/
   gateway/          FastAPI app, schemas, token-bucket limiter, Redis backplane
-  scheduler/        router, batch former, admission, dispatch, Redis-Streams queue, gRPC server
+  scheduler/        router, radix router, batch former, admission, dispatch, Redis-Streams queue, gRPC server
   worker/           harness + engines/{mock, cache_aware_mock, ollama, torch_mps, vllm}
 proto/relay/v1/     worker.proto (buf lint/breaking in CI)
-bench/              workload, calibrate, simulate, run, crossover  →  results/
+bench/              workload, calibrate, simulate, run, crossover, radix_compare  →  results/
 deploy/             compose/, postgres/, redis/, helm/relay/, k8s/ (HPA + prometheus-adapter)
 dashboards/         relay.json (Grafana, keyed to the metric names)
-tests/unit/         75 tests: ring, router, former, engines, workload, limiter, admission
+tests/unit/         96 tests: ring, router, radix tree + router, former, engines, workload, limiter, admission
 ```
 
 ## Tests
 
 ```bash
-make test           # PYTHONPATH=. python -m pytest tests/unit  →  75 passed
+make test           # PYTHONPATH=. python -m pytest tests/unit  →  96 passed
 ```
 
-The suite pins the properties the result depends on: the ring's minimal-disruption guarantee, the router's affinity-vs-spill behaviour across the cap, the former's no-starvation dispatch trigger, the cache engine's exact hit/miss latency law, and the workload's distribution and prefix-hash stability.
+The suite pins the properties the result depends on: the ring's minimal-disruption guarantee, the router's affinity-vs-spill behaviour across the cap, the radix tree's longest-match and reference-counted LRU eviction, the former's no-starvation dispatch trigger, the cache engine's exact hit/miss latency law, and the workload's distribution and prefix-hash stability.
 
 ## Limitations
 
 1. **The crossover is simulated; the routing is validated on real hardware.** The crossover/frontier numbers come from a virtual-time model (real M2 per-token rates, simulated routing). The routing layer itself has now been run against **two real vLLM workers with separate KV caches on 2× A40** ([`bench/results/VLLM_VALIDATION.md`](bench/results/VLLM_VALIDATION.md)): Relay's own `PrefixRouter` holds placement (1.00 vs 1.45–1.57 distinct workers/prefix), drives cache-hit 0.74→0.96 (vLLM's own `cached_tokens`), and its p99 advantage grows with prefix length (1.13×→1.24×) — confirming the *mechanism*. It does **not** confirm the crossover *location*: on the A40, affinity wins even at 128 tokens, so that hardware's crossover sits below the tested range, while the ~530-token figure is specific to the M2's ~23× decode/prefill ratio (different hardware → different economics → different crossover). Remaining future work is **scale** (2 workers / 0.5B model, not a throughput study) and the long-prefix tail (the 4096-token point hit a context/timeout limit).
 2. **Cache eviction is modeled** (LRU at fixed capacity), not validated against a real engine under memory pressure — the long-prefix end of the crossover is most exposed to this.
 3. **The batching model is linear** (`alpha + beta·b`); real continuous batching bends the curve and chunks prefill.
-4. **Single-prefix-hash affinity, not longest-prefix (radix) matching**, and prefixes are hashed on character blocks while real engines cache token blocks.
+4. **The headline crossover uses single-prefix-hash routing, not longest-prefix (radix) matching.** Longest-prefix (radix) routing *is* implemented and tested separately ([`bench/results/RADIX.md`](bench/results/RADIX.md)) — a reference-counted radix tree plus `RadixPrefixRouter`, which on a broadly-shared-stem workload improves cache reuse (0.83→0.90) and load balance (imbalance 2.23→1.37) over first-block hashing. That comparison uses a block-level cost model, not measured hardware, and the radix router is not yet wired into the crossover sim; the main path still hashes character blocks rather than token blocks.
 
 ## Roadmap
 
-Parked, in order: (1) characterize the crossover *surface* — sweep decode/prefill ratio and skew, and the cache-eviction-pressure regime the literature flags; (2) token-block hashing, then longest-prefix (radix) routing, SGLang-style; (3) the optional 2-GPU vLLM validation; (4) prefill/decode disaggregation — the measured 30.4-vs-1.3 ms/token split is exactly its motivation, and the vLLM Router already supports it.
+Parked, in order: (1) characterize the crossover *surface* — sweep decode/prefill ratio and skew, and the cache-eviction-pressure regime the literature flags; (2) wire the now-implemented longest-prefix (radix) router into the crossover sim, and move from character-block to token-block hashing; (3) scale the vLLM validation past 2 workers / 0.5B and land the long-prefix (4096-token) point; (4) prefill/decode disaggregation — the measured 30.4-vs-1.3 ms/token split is exactly its motivation, and the vLLM Router already supports it.
 
 ## Where this sits
 
