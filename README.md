@@ -118,13 +118,8 @@ flowchart LR
 
     client -->|"REST / SSE"| gw
     gw -->|enqueue| sch
-
-    sch -->|"dispatch: prefix → home worker"| w0
-    sch --> w1
-    sch --> wN
-    w0 -->|"lease (workers pull) + results"| sch
-    w1 --> sch
-    wN --> sch
+    sch ==>|"route: prefix → worker"| pool
+    pool -.->|"lease (pull) + results"| sch
 
     gw --- redis
     sch --- redis
@@ -133,7 +128,7 @@ flowchart LR
 
     gw -.-> prom
     sch -.-> prom
-    w0 -.-> prom
+    pool -.-> prom
     prom -.-> graf
     prom --> hpa
     hpa ==>|"relay_queue_depth → scale"| pool
