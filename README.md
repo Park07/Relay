@@ -100,30 +100,46 @@ flowchart LR
 
     subgraph cp["Control plane"]
         gw["Gateway<br/>auth · rate-limit · idempotency"]
-        sch["Scheduler<br/>admit · batch · route"]
+        sch["Scheduler<br/>admit · batch · route by prefix"]
     end
 
-    workers["Worker × N<br/>engine"]
+    subgraph pool["Workers · each holds a private KV cache"]
+        direction TB
+        w0["Worker 0<br/>KV cache"]
+        w1["Worker 1<br/>KV cache"]
+        wN["Worker N<br/>KV cache"]
+    end
+
     redis[("Redis<br/>queues · jobs · rate · idem")]
-    pg[("Postgres<br/>durable state / analytics")]
+    pg[("Postgres<br/>durable state · analytics")]
     prom["Prometheus<br/>/metrics"]
     graf(["Grafana"])
-    hpa["HPA<br/>scale on relay_queue_depth"]
+    hpa["HPA"]
 
     client -->|"REST / SSE"| gw
     gw -->|enqueue| sch
-    sch <-->|"gRPC bidi — lease / dispatch / results"| workers
+
+    sch -->|"dispatch: prefix → home worker"| w0
+    sch --> w1
+    sch --> wN
+    w0 -->|"lease (workers pull) + results"| sch
+    w1 --> sch
+    wN --> sch
+
     gw --- redis
     sch --- redis
     gw -.-> pg
     sch -.-> pg
-    gw --> prom
-    sch --> prom
-    workers --> prom
-    prom --> graf
+
+    gw -.-> prom
+    sch -.-> prom
+    w0 -.-> prom
+    prom -.-> graf
     prom --> hpa
-    hpa -. scales .-> workers
+    hpa ==>|"relay_queue_depth → scale"| pool
 ```
+
+<sub>Edges: **solid** = synchronous request hot path · **dotted** = async persistence & metrics · **thick** = autoscaling control loop. Workers *pull* leased work (backpressure), and the scheduler routes each prefix to its home worker so that worker's KV cache is reused.</sub>
 
 - **Routing depth**: `services/scheduler/router.py` + `relay_core/hashing.py`.
 - **Batching**: `services/scheduler/batch_former.py` (priority = a tighter latency budget; no-starvation dispatch trigger).
